@@ -12,9 +12,12 @@ from playwright.sync_api import sync_playwright
 from apscheduler.schedulers.background import BackgroundScheduler
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY")
+app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
 
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ["DATABASE_URL"]
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
+    "DATABASE_URL",
+    "sqlite:///instance/netflix_manager_final.db"
+)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['REMEMBER_COOKIE_HTTPONLY'] = True
@@ -160,52 +163,56 @@ def create_default_admin():
 
 
 with app.app_context():
-    import time
+    db_ready = False
 
-    for i in range(5):
+    for i in range(15):
         try:
             db.create_all()
+            db_ready = True
+            print("[DB] Connected and create_all OK")
             break
         except Exception as e:
-            print("DB chưa sẵn sàng, retry...", e)
+            print(f"[DB] Retry {i+1}/15: {e}")
             time.sleep(2)
 
-    from sqlalchemy import inspect, text
-    inspector = inspect(db.engine)
+    if db_ready:
+        from sqlalchemy import inspect, text
+        inspector = inspect(db.engine)
 
-    user_tables = inspector.get_table_names()
-    if 'standard_sub' in user_tables:
-        columns = [col['name'] for col in inspector.get_columns('standard_sub')]
-        if 'created_by_user_id' not in columns:
-            db.session.execute(text("ALTER TABLE standard_sub ADD COLUMN created_by_user_id INTEGER"))
-        if 'created_by_name' not in columns:
-            db.session.execute(text("ALTER TABLE standard_sub ADD COLUMN created_by_name VARCHAR(100) DEFAULT ''"))
-        db.session.commit()
+        user_tables = inspector.get_table_names()
+        if 'standard_sub' in user_tables:
+            columns = [col['name'] for col in inspector.get_columns('standard_sub')]
+            if 'created_by_user_id' not in columns:
+                db.session.execute(text("ALTER TABLE standard_sub ADD COLUMN created_by_user_id INTEGER"))
+            if 'created_by_name' not in columns:
+                db.session.execute(text("ALTER TABLE standard_sub ADD COLUMN created_by_name VARCHAR(100) DEFAULT ''"))
+            db.session.commit()
 
-    if 'premium_slot' in user_tables:
-        columns = [col['name'] for col in inspector.get_columns('premium_slot')]
-        if 'created_by_user_id' not in columns:
-            db.session.execute(text("ALTER TABLE premium_slot ADD COLUMN created_by_user_id INTEGER"))
-        if 'created_by_name' not in columns:
-            db.session.execute(text("ALTER TABLE premium_slot ADD COLUMN created_by_name VARCHAR(100) DEFAULT ''"))
-        db.session.commit()
+        if 'premium_slot' in user_tables:
+            columns = [col['name'] for col in inspector.get_columns('premium_slot')]
+            if 'created_by_user_id' not in columns:
+                db.session.execute(text("ALTER TABLE premium_slot ADD COLUMN created_by_user_id INTEGER"))
+            if 'created_by_name' not in columns:
+                db.session.execute(text("ALTER TABLE premium_slot ADD COLUMN created_by_name VARCHAR(100) DEFAULT ''"))
+            db.session.commit()
 
-    if 'account_vault' in user_tables:
-        columns = [col['name'] for col in inspector.get_columns('account_vault')]
-        if 'assigned_to' not in columns:
-            db.session.execute(text("ALTER TABLE account_vault ADD COLUMN assigned_to VARCHAR(100) DEFAULT ''"))
-        if 'assigned_to_user_id' not in columns:
-            db.session.execute(text("ALTER TABLE account_vault ADD COLUMN assigned_to_user_id INTEGER"))
-        if 'assigned_at' not in columns:
-            db.session.execute(text("ALTER TABLE account_vault ADD COLUMN assigned_at DATETIME"))
-        if 'last_checked_at' not in columns:
-            db.session.execute(text("ALTER TABLE account_vault ADD COLUMN last_checked_at DATETIME"))
-        if 'next_recheck_at' not in columns:
-            db.session.execute(text("ALTER TABLE account_vault ADD COLUMN next_recheck_at DATETIME"))
-        db.session.commit()
+        if 'account_vault' in user_tables:
+            columns = [col['name'] for col in inspector.get_columns('account_vault')]
+            if 'assigned_to' not in columns:
+                db.session.execute(text("ALTER TABLE account_vault ADD COLUMN assigned_to VARCHAR(100) DEFAULT ''"))
+            if 'assigned_to_user_id' not in columns:
+                db.session.execute(text("ALTER TABLE account_vault ADD COLUMN assigned_to_user_id INTEGER"))
+            if 'assigned_at' not in columns:
+                db.session.execute(text("ALTER TABLE account_vault ADD COLUMN assigned_at DATETIME"))
+            if 'last_checked_at' not in columns:
+                db.session.execute(text("ALTER TABLE account_vault ADD COLUMN last_checked_at DATETIME"))
+            if 'next_recheck_at' not in columns:
+                db.session.execute(text("ALTER TABLE account_vault ADD COLUMN next_recheck_at DATETIME"))
+            db.session.commit()
 
-    create_default_admin()
-
+        create_default_admin()
+    else:
+        print("[DB] Database not ready, skipping init for now")
 
 # --- HELPERS ---
 

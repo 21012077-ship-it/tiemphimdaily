@@ -1,10 +1,6 @@
-FROM mcr.microsoft.com/playwright/python:v1.53.0-jammy
-
+FROM python:3.11-slim
 WORKDIR /app
-
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-
 COPY . .
-
-CMD ["gunicorn", "-w", "2", "-b", "0.0.0.0:8000", "app:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "app:app"]
