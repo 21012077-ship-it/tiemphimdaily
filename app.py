@@ -152,17 +152,28 @@ def not_tv_required(func):
         return func(*args, **kwargs)
     return wrapper
 
-
 def create_default_admin():
     admin_username = os.environ.get('ADMIN_USERNAME', 'admin')
     admin_password = os.environ.get('ADMIN_PASSWORD', 'admin123')
+
     admin = User.query.filter_by(username=admin_username).first()
+
     if not admin:
-        admin = User(username=admin_username, full_name='Quản trị viên', role='admin', active=True)
-        admin.set_password(admin_password)
+        admin = User(
+            username=admin_username,
+            full_name='Quản trị viên',
+            role='admin',
+            active=True
+        )
         db.session.add(admin)
-        db.session.commit()
-        print(f"[AUTH] Đã tạo tài khoản admin mặc định: {admin_username} / {admin_password}")
+
+    admin.active = True
+    admin.role = 'admin'
+    admin.full_name = 'Quản trị viên'
+    admin.set_password(admin_password)
+
+    db.session.commit()
+    print(f"[AUTH] Admin ready: {admin_username} / {admin_password}")
 
 
 with app.app_context():
