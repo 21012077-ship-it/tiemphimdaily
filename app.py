@@ -12,25 +12,18 @@ from playwright.sync_api import sync_playwright
 from apscheduler.schedulers.background import BackgroundScheduler
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
+app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key")
 
-if not os.path.exists("instance"):
-    os.makedirs("instance")
+# Railway: dùng PostgreSQL nếu có, nếu không thì tạm dùng SQLite ở /tmp
+database_url = os.environ.get("DATABASE_URL")
 
+if database_url:
+    app.config["SQLALCHEMY_DATABASE_URI"] = database_url
+else:
+    db_path = "/tmp/netflix_manager_final.db"
+    app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
 
-import os
-
-os.makedirs(app.instance_path, exist_ok=True)
-
-db_path = os.path.join(app.instance_path, "netflix_manager_final.db")
-
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
-    "DATABASE_URL",
-    f"sqlite:///{db_path}"
-)
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['REMEMBER_COOKIE_HTTPONLY'] = True
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
