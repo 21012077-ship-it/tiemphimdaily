@@ -926,30 +926,53 @@ def check_account(item_id):
 
 @app.route('/fetch_account', methods=['POST'])
 @login_required
-@not_tv_required
 def fetch_account():
     try:
         data = request.get_json(silent=True) or {}
         plan = (data.get('plan') or '').strip()
-        query = AccountVault.query.filter(AccountVault.status.in_(['Offline', 'Đã Live']))
-        query = query.filter((AccountVault.assigned_to_user_id.is_(None)) | (AccountVault.assigned_to_user_id == current_user.id))
+
+        query = AccountVault.query.filter(
+            AccountVault.status.in_(['Offline', 'Chưa Check', 'Đã Live'])
+        )
+        query = query.filter(
+            (AccountVault.assigned_to_user_id.is_(None)) |
+            (AccountVault.assigned_to_user_id == current_user.id)
+        )
+
         if plan:
             query = query.filter(AccountVault.plan.ilike(f"%{plan}%"))
+
         candidates = query.order_by(AccountVault.id.asc()).all()
+
         if not candidates:
-            return jsonify({'success': False, 'message': 'Không còn tài khoản phù hợp trong kho.'}), 404
+            return jsonify({
+                'success': False,
+                'message': 'Không còn tài khoản phù hợp trong kho.'
+            }), 404
 
         for acc in candidates:
             is_live, check_msg = check_netflix_cookie_live(acc.cookies)
             acc.last_checked_at = datetime.now()
             acc.status = 'Đã Live' if is_live else 'Dead'
             db.session.commit()
-            if is_live:
-                return jsonify({'success': True, 'message': f'Lấy tài khoản thành công. {check_msg}', 'account': format_vault_status(acc, include_secrets=True)})
 
-        return jsonify({'success': False, 'message': 'Đã kiểm tra toàn bộ nhưng không có tài khoản nào còn hoạt động.'}), 404
+            if is_live:
+                return jsonify({
+                    'success': True,
+                    'message': f'Lấy tài khoản thành công. {check_msg}',
+                    'account': format_vault_status(acc, include_secrets=True)
+                })
+
+        return jsonify({
+            'success': False,
+            'message': 'Đã kiểm tra toàn bộ nhưng không có tài khoản nào còn hoạt động.'
+        }), 404
+
     except Exception as e:
-        return jsonify({'success': False, 'message': f'Lỗi khi lấy tài khoản: {str(e)}'}), 500
+        return jsonify({
+            'success': False,
+            'message': f'Lỗi khi lấy tài khoản: {str(e)}'
+        }), 500
 
 
 @app.route('/login_tv_code', methods=['POST'])
