@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TV Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { font-family: 'Inter', sans-serif; background: linear-gradient(135deg, #111827, #1f2937); }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-md bg-white rounded-3xl shadow-2xl p-8">
+        <div class="text-center mb-8">
+            <div class="w-20 h-20 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
+                <i class="fas fa-tv"></i>
+            </div>
+            <h1 class="text-2xl font-bold text-gray-900">Đăng nhập TV</h1>
+            <p class="text-sm text-gray-500 mt-2">
+                Xin chào <b>{{ current_user.full_name or current_user.username }}</b>
+            </p>
+            <div class="mt-2">
+                <span class="inline-flex px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 border border-red-200">
+                    ROLE: TV
+                </span>
+            </div>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="mb-4 space-y-2">
+                    {% for category, message in messages %}
+                        <div class="p-3 rounded-lg text-sm font-bold {{ 'bg-green-100 text-green-700 border border-green-200' if category == 'success' else ('bg-yellow-100 text-yellow-700 border border-yellow-200' if category == 'warning' else 'bg-red-100 text-red-700 border border-red-200') }}">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <div>
+            <label class="text-xs font-bold text-gray-600 mb-2 block">Mã TV (8 ký tự)</label>
+            <input
+                type="text"
+                id="tv_code_input"
+                maxlength="10"
+                placeholder="VD: 1234 5678"
+                class="w-full border border-gray-300 bg-gray-50 rounded-xl px-4 py-4 text-xl font-bold text-center tracking-widest uppercase focus:outline-none focus:ring-2 focus:ring-red-400"
+            >
+        </div>
+
+        <div class="mt-6 grid grid-cols-2 gap-3">
+            <a href="{{ url_for('logout') }}" class="text-center bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-xl font-bold transition-all">
+                Đăng xuất
+            </a>
+            <button id="btn_submit_tv" onclick="submitTVCode()" class="bg-red-600 hover:bg-red-700 text-white py-3 rounded-xl font-bold shadow-md transition-all flex justify-center items-center">
+                Duyệt Mã Ngay
+            </button>
+        </div>
+
+        <p class="text-xs text-gray-400 text-center mt-6">
+            Tài khoản TV chỉ được sử dụng chức năng đăng nhập TV.
+        </p>
+    </div>
+
+    <script>
+        async function submitTVCode() {
+            const codeInput = document.getElementById('tv_code_input');
+            const btn = document.getElementById('btn_submit_tv');
+            const tvCode = codeInput.value.replace(/\s/g, '').trim();
+
+            if (tvCode.length !== 8) {
+                showToastMessage('Mã TV phải chứa đúng 8 ký tự!');
+                codeInput.focus();
+                return;
+            }
+
+            const originalBtnHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Đang duyệt...';
+            btn.disabled = true;
+            btn.classList.add('opacity-75', 'cursor-not-allowed');
+
+            try {
+                const res = await fetch('/login_tv_code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tv_code: tvCode })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    showToastMessage(data.message);
+                    codeInput.value = '';
+                } else {
+                    showToastMessage(data.message || 'Có lỗi xảy ra');
+                }
+            } catch (err) {
+                console.error(err);
+                showToastMessage('Có lỗi máy chủ xảy ra!');
+            } finally {
+                btn.innerHTML = originalBtnHTML;
+                btn.disabled = false;
+                btn.classList.remove('opacity-75', 'cursor-not-allowed');
+            }
+        }
+
+        function showToastMessage(text) {
+            const toast = document.createElement('div');
+            toast.className = 'fixed bottom-5 right-5 bg-gray-800 text-white px-5 py-3 rounded-lg shadow-2xl text-sm z-50 font-bold flex items-center z-[9999]';
+            toast.innerHTML = `<i class="fas fa-circle-info text-blue-400 mr-2 text-lg"></i> ${text}`;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 2500);
+        }
+
+        document.getElementById('tv_code_input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                submitTVCode();
+            }
+        });
+    </script>
+</body>
+</html>

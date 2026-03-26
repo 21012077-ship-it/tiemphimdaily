@@ -1,0 +1,1163 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Netflix Admin Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        .tab-active { background-color: white; border-bottom: 2px solid; font-weight: 700; }
+        .tab-inactive { color: #6b7280; font-weight: 500; border-bottom: 2px solid transparent; }
+        .tab-inactive:hover { background-color: #f9fafb; color: #374151; }
+        .transition-all { transition-property: all; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 300ms; }
+    </style>
+</head>
+<body class="p-4 md:p-8 min-h-screen">
+
+    <div class="max-w-7xl mx-auto">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+            <div>
+                <h1 class="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">Quản Lý Tài Khoản</h1>
+                <p class="text-sm text-gray-500 mt-1">Hệ thống theo dõi hạn sử dụng & thanh toán</p>
+                <div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                    <span class="bg-white border border-gray-200 text-gray-700 px-3 py-1 rounded-full shadow-sm">
+                        Đăng nhập: <b>{{ current_user.full_name or current_user.username }}</b>
+                    </span>
+                    <span class="px-3 py-1 rounded-full font-bold {{ 'bg-red-100 text-red-700 border border-red-200' if current_user.role == 'admin' else 'bg-blue-100 text-blue-700 border border-blue-200' }}">
+                        {{ current_user.role|upper }}
+                    </span>
+                </div>
+            </div>
+            <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                <div class="bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-200 text-sm font-medium text-gray-600 flex items-center">
+                    <i class="far fa-calendar-alt mr-2 text-blue-500 text-lg"></i>
+                    Hôm nay: <span class="font-bold text-gray-900 ml-1 text-base">{{ today.strftime('%d/%m/%Y') }}</span>
+                </div>
+                <a href="{{ url_for('logout') }}" class="bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-black transition-all shadow-sm flex items-center gap-2">
+                    <i class="fas fa-right-from-bracket"></i> Đăng xuất
+                </a>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-t-xl shadow-sm border-b border-gray-200 px-2 md:px-6 pt-2 overflow-x-auto">
+            <div class="flex space-x-4 min-w-max">
+                <div id="btn-todo" onclick="switchTab('view-todo')" class="py-4 px-4 md:px-6 cursor-pointer tab-active border-purple-600 text-purple-700 flex items-center gap-2 rounded-t-lg transition-all">
+                    <div class="relative">
+                        <i class="fas fa-clipboard-list text-xl"></i>
+                        {% if todos|length > 0 %}
+                        <span class="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full animate-bounce shadow-sm ring-2 ring-white">{{ todos|length }}</span>
+                        {% endif %}
+                    </div>
+                    <span>Cần Làm Ngay</span>
+                </div>
+                <div id="btn-premium" onclick="switchTab('view-premium')" class="py-4 px-4 md:px-6 cursor-pointer tab-inactive border-transparent hover:text-gray-800 flex items-center gap-2 rounded-t-lg transition-all">
+                    <i class="fas fa-crown text-yellow-500 text-lg"></i> <span>Gói Cao Cấp</span>
+                </div>
+                <div id="btn-standard" onclick="switchTab('view-standard')" class="py-4 px-4 md:px-6 cursor-pointer tab-inactive border-transparent hover:text-gray-800 flex items-center gap-2 rounded-t-lg transition-all">
+                    <i class="fas fa-user text-blue-500 text-lg"></i> <span>Gói Phổ Thông</span>
+                </div>
+                {% if current_user.role == 'ctv' %}
+                <div id="btn-fetch" onclick="switchTab('view-fetch')" class="py-4 px-4 md:px-6 cursor-pointer tab-inactive border-transparent hover:text-gray-800 flex items-center gap-2 rounded-t-lg transition-all">
+                    <i class="fas fa-tv text-teal-500 text-lg"></i> <span>Lấy Tài Khoản</span>
+                </div>
+                {% endif %}
+                {% if current_user.role == 'admin' %}
+                <div id="btn-master" onclick="switchTab('view-master')" class="py-4 px-4 md:px-6 cursor-pointer tab-inactive border-transparent hover:text-gray-800 flex items-center gap-2 rounded-t-lg transition-all">
+                    <i class="fas fa-database text-gray-500 text-lg"></i> <span>Danh Sách Tổng Hợp</span>
+                </div>
+                <div id="btn-vault" onclick="switchTab('view-vault')" class="py-4 px-4 md:px-6 cursor-pointer tab-inactive border-transparent hover:text-gray-800 flex items-center gap-2 rounded-t-lg transition-all">
+                    <i class="fas fa-box-open text-teal-500 text-lg"></i> <span>Kho Tài Khoản</span>
+                </div>
+                <div id="btn-users" onclick="switchTab('view-users')" class="py-4 px-4 md:px-6 cursor-pointer tab-inactive border-transparent hover:text-gray-800 flex items-center gap-2 rounded-t-lg transition-all">
+                    <i class="fas fa-users text-rose-500 text-lg"></i> <span>Tài Khoản Hệ Thống</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="bg-white rounded-b-xl shadow-lg min-h-[600px] p-4 md:p-8 bg-gray-50/30">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="mb-6 space-y-2">
+                    {% for category, message in messages %}
+                        <div class="p-4 rounded-lg text-sm font-bold shadow-sm flex items-center gap-3 animate-pulse {{ 'bg-green-100 text-green-700 border border-green-200' if category == 'success' else ('bg-yellow-100 text-yellow-700 border border-yellow-200' if category == 'warning' else 'bg-red-100 text-red-700 border border-red-200') }}">
+                            <i class="fas {{ 'fa-check-circle' if category == 'success' else 'fa-exclamation-circle' }} text-lg"></i> {{ message }}
+                        </div>
+                    {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+
+            <div id="view-todo" class="max-w-5xl mx-auto hidden">
+                <div class="flex justify-between items-end mb-6 pb-4 border-b border-gray-100">
+                    <div>
+                        <h2 class="text-xl font-bold text-gray-800">Danh sách việc cần xử lý</h2>
+                        <p class="text-sm text-gray-500 mt-1">Khách hàng sắp hết hạn (Đang hoạt động)</p>
+                    </div>
+                    <div class="text-xs bg-purple-100 text-purple-700 px-3 py-1.5 rounded-full font-bold border border-purple-200 shadow-sm">{{ todos|length }} công việc</div>
+                </div>
+
+                {% if todos|length == 0 %}
+                <div class="text-center py-20 bg-white rounded-2xl border-2 border-dashed border-gray-200">
+                    <div class="w-20 h-20 bg-green-50 text-green-500 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl shadow-inner"><i class="fas fa-check"></i></div>
+                    <h3 class="text-lg font-bold text-gray-800">Tuyệt vời!</h3>
+                    <p class="text-gray-500 mt-1">Không có khách hàng nào sắp hết hạn hôm nay.</p>
+                </div>
+                {% else %}
+                <div class="space-y-4">
+                    {% for item in todos %}
+                    <div class="flex flex-col lg:flex-row lg:items-center justify-between bg-white p-5 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-all group relative overflow-hidden" id="todo-card-{{ item.type }}-{{ item.id }}">
+                        <div class="absolute left-0 top-0 bottom-0 w-1.5 {{ 'bg-red-500' if item.days <= 0 else 'bg-yellow-400' }}"></div>
+
+                        <div class="flex items-start gap-4 mb-4 lg:mb-0 w-full lg:w-4/12 pl-2">
+                            <div class="w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center bg-gray-50 border border-gray-100 text-gray-400">
+                                <i class="fas {{ 'fa-crown text-yellow-500' if item.type == 'premium' else 'fa-user text-blue-500' }} text-xl"></i>
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-gray-800 text-lg leading-tight">
+                                    {{ item.name }}
+                                    <div class="text-xs text-gray-400 mt-1">
+                                        CTV: {{ item.created_by_name or '---' }}
+                                    </div>
+                                    {% if item.contact_link %}
+                                        <a href="{% if item.source == 'Zalo' %}https://zalo.me/{{item.contact_link}}{% else %}{{item.contact_link}}{% endif %}" target="_blank" class="text-blue-500 hover:text-blue-700 ml-1" title="Nhắn tin ngay">
+                                            <i class="fas fa-external-link-square-alt text-sm"></i>
+                                        </a>
+                                    {% endif %}
+                                </h3>
+                                <div class="text-xs text-gray-500 mt-1.5 flex flex-wrap items-center gap-2">
+                                    <span class="bg-gray-100 px-2 py-0.5 rounded text-gray-600 font-medium border border-gray-200">{{ item.sub_text }}</span>
+                                    <span>Hết hạn: <b class="text-gray-800">{{ item.expiry.strftime('%d/%m') }}</b></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="w-full lg:w-3/12 flex justify-start lg:justify-center mb-4 lg:mb-0">
+                            <form action="/update_status/{{ item.type }}/{{ item.id }}" method="POST" class="w-full max-w-[180px]">
+                                <select id="status-select-{{ item.type }}-{{ item.id }}" name="payment_status" onchange="updateStatusAJAX('{{ item.type }}', {{ item.id }}, this.value, this)"
+                                        class="w-full text-xs font-bold py-2.5 px-3 rounded-lg border cursor-pointer outline-none shadow-sm transition-all text-center {{ 'bg-green-100 text-green-700 border-green-200' if item.status == 'Đã thu tiền' else ('bg-blue-100 text-blue-700 border-blue-200' if item.status == 'Đã gửi tin nhắn' else 'bg-gray-100 text-gray-600 border-gray-200') }}">
+                                    <option value="Chưa thu" {{ 'selected' if item.status == 'Chưa thu' }}>🔴 Chưa thu tiền</option>
+                                    <option value="Đã gửi tin nhắn" {{ 'selected' if item.status == 'Đã gửi tin nhắn' }}>🔵 Đã gửi tin nhắn</option>
+                                    <option value="Đã thu tiền" {{ 'selected' if item.status == 'Đã thu tiền' }}>🟢 Đã thu tiền (OK)</option>
+                                </select>
+                            </form>
+                        </div>
+
+                        <div class="w-full lg:w-5/12 flex items-center justify-between lg:justify-end gap-4">
+                            <div class="text-right min-w-[90px]">
+                                {% if item.days < 0 %}
+                                <div class="text-red-600 font-bold text-sm">Quá {{ item.days|abs }} ngày</div>
+                                {% else %}
+                                <div class="text-yellow-600 font-bold text-sm">Còn {{ item.days }} ngày</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="flex gap-2">
+                                <button onclick="copyAndStatus('{{ item.name }}', {{ item.days }}, '{{ item.type }}', {{ item.id }})" class="w-10 h-10 rounded-lg bg-gray-50 hover:bg-indigo-100 border border-gray-200 hover:border-indigo-200 text-gray-500 hover:text-indigo-600 flex items-center justify-center transition-all">
+                                    <i class="far fa-comment-dots text-lg"></i>
+                                </button>
+
+                                <form onsubmit="quickRenewAJAX(event, '{{ item.type }}', {{ item.id }}, this)" class="flex">
+                                    <select name="duration" class="bg-gray-100 border border-gray-200 text-gray-700 text-xs rounded-l-lg px-2 py-2.5 outline-none cursor-pointer hover:bg-gray-200 w-[70px]">
+                                        <option value="1">1 thg</option>
+                                        <option value="3">3 thg</option>
+                                        <option value="6">6 thg</option>
+                                        <option value="12">1 năm</option>
+                                    </select>
+                                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2.5 rounded-r-lg text-sm font-bold shadow-md transition-all flex items-center gap-1 border-l border-blue-500">
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                </form>
+
+                                <a href="/stop_service/{{ item.type }}/{{ item.id }}" onclick="return confirm('Xác nhận NGỪNG DỊCH VỤ khách này?\n\n(Khách sẽ được lưu vào Tab Danh Sách Tổng Hợp chứ không bị xoá hẳn)')" class="w-10 h-10 rounded-lg bg-red-50 hover:bg-red-100 border border-red-200 hover:border-red-300 text-red-500 hover:text-red-700 flex items-center justify-center transition-all shadow-sm">
+                                    <i class="fas fa-times text-lg"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+
+            <div id="view-premium" class="hidden">
+                {% if current_user.role == 'admin' %}
+                <div class="mb-8 flex flex-col md:flex-row justify-between items-center bg-white p-5 rounded-xl shadow-sm border border-gray-100 gap-4">
+                    <form action="/add_premium_account" method="POST" class="flex gap-3 flex-grow w-full md:w-auto max-w-xl">
+                        <input type="email" name="email" placeholder="Nhập Email Master mới..." required class="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 text-sm">
+                        <button type="submit" class="bg-gray-900 text-white px-6 py-2.5 rounded-lg text-sm font-bold shadow-lg flex items-center gap-2 whitespace-nowrap">
+                            <i class="fas fa-plus-circle"></i> Tạo Nhóm
+                        </button>
+                    </form>
+                </div>
+                {% else %}
+                <div class="mb-6 bg-blue-50 border border-blue-100 text-blue-800 rounded-xl p-4 text-sm font-medium">CTV được thêm hồ sơ vào các nhóm còn trống. Mỗi hồ sơ sẽ lưu tên CTV đã thêm.</div>
+                {% endif %}
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                    {% for acc in premiums %}
+                    <div class="group bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col h-full ring-1 ring-gray-100 hover:ring-gray-300">
+                        <div class="bg-gray-900 p-4 flex justify-between items-center relative overflow-hidden">
+                            <div class="absolute top-0 right-0 p-4 opacity-10 pointer-events-none"><i class="fab fa-netflix text-6xl text-white"></i></div>
+                            <div class="flex items-center gap-3 relative z-10 w-4/5">
+                                <div class="w-9 h-9 rounded bg-red-600 flex items-center justify-center text-white font-bold text-xs shadow-inner shrink-0 border border-red-500">N</div>
+                                <div class="flex flex-col overflow-hidden">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-white font-bold text-sm truncate">{{ acc.email }}</span>
+                                        {% if current_user.role == 'admin' %}
+                                        <button onclick="openEditAccModal('{{ acc.id }}', '{{ acc.email }}')" class="text-gray-400 hover:text-white transition-colors cursor-pointer z-20 relative" title="Sửa email nhóm">
+                                            <i class="fas fa-pen text-xs"></i>
+                                        </button>
+                                        {% endif %}
+                                    </div>
+                                    <div class="flex items-center gap-1 mt-1">
+                                        {% for i in range(5) %}
+                                        <div class="h-1 w-5 rounded-full {{ 'bg-green-500' if i < acc.slots|length else 'bg-gray-700' }}"></div>
+                                        {% endfor %}
+                                        <span class="text-[10px] text-gray-400 ml-2 font-medium">{{ acc.active_count }}/5 Slot Active</span>
+                                    </div>
+                                </div>
+                            </div>
+                            {% if current_user.role == 'admin' %}
+                            <a href="/delete_premium_acc/{{ acc.id }}" onclick="return confirm('Xoá toàn bộ nhóm?')" class="text-gray-500 hover:text-red-500 p-2 relative z-10">
+                                <i class="fas fa-trash-alt"></i>
+                            </a>
+                            {% endif %}
+                        </div>
+
+                        <div class="p-3 bg-gray-50 flex-grow flex flex-col gap-2.5">
+                            {% for slot in acc.slots %}
+                            {% if slot.active %}
+                            <div class="flex items-center justify-between bg-white p-3 rounded-xl border border-gray-100 shadow-sm transition-all relative cursor-pointer hover:border-blue-300 hover:shadow-md" onclick="openEditModal('{{ slot.id }}', '{{ slot.customer_name }}', '{{ slot.profile_name }}', '{{ slot.source }}', '{{ slot.expiry_date }}', '{{ slot.contact_link }}')">
+                                <div class="absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-white {{ 'bg-green-500' if slot.payment_status == 'Đã thu tiền' else ('bg-blue-500' if slot.payment_status == 'Đã gửi tin nhắn' else 'bg-gray-300') }}"></div>
+                                <div class="flex items-center gap-3 overflow-hidden w-full pointer-events-none">
+                                    <div class="w-10 h-10 rounded-lg bg-cover bg-center shadow-inner relative shrink-0 border border-gray-100" style="background-image: url('https://upload.wikimedia.org/wikipedia/commons/0/0b/Netflix-avatar.png');">
+                                        <span class="absolute -bottom-1.5 -right-1.5 bg-gray-900 text-white text-[9px] px-1.5 py-0.5 rounded border border-white font-bold shadow-sm max-w-[50px] truncate">{{ slot.profile_name }}</span>
+                                    </div>
+                                    <div class="overflow-hidden flex-grow min-w-0 pr-2">
+                                        <div class="font-bold text-gray-800 text-sm truncate">{{ slot.customer_name }}</div>
+                                        <div class="text-[10px] text-gray-400 mt-0.5">CTV thêm: {{ slot.created_by_name or '---' }}</div>
+                                        <div class="flex items-center gap-2 mt-0.5">
+                                            <span class="text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded truncate max-w-[80px]">{{ slot.source }}</span>
+                                            <span class="text-[10px] font-bold {{ 'text-red-600 bg-red-50' if slot.days_left <= 3 else 'text-green-600 bg-green-50' }} px-1.5 py-0.5 rounded border border-green-100 whitespace-nowrap">{{ slot.days_left }} ngày</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% if current_user.role == 'admin' or slot.created_by_user_id == current_user.id %}
+                                <a href="/stop_service/premium/{{ slot.id }}" onclick="event.stopPropagation(); return confirm('Dừng dịch vụ khách này?')" class="text-gray-300 hover:text-red-500 px-2 shrink-0 z-10">
+                                    <i class="fas fa-times"></i>
+                                </a>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                            {% endfor %}
+
+                            {% for i in range(5 - acc.active_count) %}
+                            <button onclick="openAddModal('{{ acc.id }}', '{{ acc.email }}')" class="flex flex-col items-center justify-center gap-1 bg-white border-2 border-dashed border-gray-200 p-2 rounded-xl text-gray-400 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-all h-[68px] group/btn">
+                                <i class="fas fa-plus-circle text-lg group-hover/btn:scale-110 transition-transform"></i>
+                                <span class="text-[11px] font-semibold">Thêm Slot Trống</span>
+                            </button>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div id="view-standard" class="hidden">
+                <form action="/add_standard" method="POST" class="mb-8 bg-blue-50 p-6 rounded-2xl border border-blue-100 flex flex-wrap gap-4 items-end shadow-sm">
+                    <input type="text" name="name" placeholder="Tên khách hàng" required class="flex-grow min-w-[200px] border border-blue-200 rounded-lg px-4 py-2.5 text-sm">
+                    <div class="flex-grow min-w-[300px] flex gap-2">
+                        <select name="source" class="w-1/3 border border-blue-200 rounded-lg px-3 py-2.5 text-sm bg-white">
+                            <option>Zalo</option>
+                            <option>Facebook</option>
+                            <option>Instagram</option>
+                        </select>
+                        <input type="text" name="contact_link" placeholder="SĐT / Link mạng xã hội" class="w-2/3 border border-blue-200 rounded-lg px-3 py-2.5 text-sm">
+                    </div>
+                    <input type="date" name="expiry_date" required class="w-[160px] border border-blue-200 rounded-lg px-3 py-2.5 text-sm">
+                    <button type="submit" class="bg-blue-600 text-white px-8 py-2.5 rounded-lg text-sm font-bold shadow-md h-[42px] flex items-center gap-2">
+                        <i class="fas fa-plus"></i> Thêm Mới
+                    </button>
+                </form>
+
+                <div class="overflow-hidden rounded-xl border border-gray-200 shadow-sm bg-white">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-gray-50 text-gray-500 text-xs uppercase font-bold tracking-wider border-b border-gray-200">
+                                <th class="p-4 pl-6">Thông tin Khách hàng</th>
+                                <th class="p-4">Nguồn</th>
+                                <th class="p-4">Ngày hết hạn</th>
+                                <th class="p-4">Trạng thái thu</th>
+                                <th class="p-4 text-center">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            {% for item in standards %}
+                            <tr class="hover:bg-blue-50/30 transition-colors bg-white">
+                                <td class="p-4 pl-6">
+                                    <div class="font-bold text-gray-900 text-sm flex items-center">
+                                        {{ item.customer_name }}
+                                        {% if item.contact_link %}
+                                            <a href="{% if item.source == 'Zalo' %}https://zalo.me/{{item.contact_link}}{% else %}{{item.contact_link}}{% endif %}" target="_blank" class="text-blue-500 hover:text-blue-700 ml-2" title="Liên hệ ngay">
+                                                <i class="fas fa-external-link-square-alt"></i>
+                                            </a>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                                <td class="p-4">
+                                    <span class="px-2.5 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-700 border border-gray-200">{{ item.source }}</span>
+                                </td>
+                                <td class="p-4">
+                                    <div class="text-sm font-bold {{ 'text-red-600' if item.days_left <= 3 else 'text-gray-700' }}">{{ item.expiry_date.strftime('%d/%m/%Y') }}</div>
+                                </td>
+                                <td class="p-4">
+                                    <form action="/update_status/standard/{{ item.id }}" method="POST">
+                                        <select name="payment_status" onchange="updateStatusAJAX('standard', {{ item.id }}, this.value, this)" class="text-xs font-bold py-1.5 px-2 rounded border cursor-pointer outline-none transition-all {{ 'bg-green-50 text-green-700 border-green-200' if item.payment_status == 'Đã thu tiền' else 'bg-gray-50 text-gray-600 border-gray-200' }}">
+                                            <option value="Chưa thu" {{ 'selected' if item.payment_status == 'Chưa thu' }}>Chưa thu</option>
+                                            <option value="Đã gửi tin nhắn" {{ 'selected' if item.payment_status == 'Đã gửi tin nhắn' }}>Đã nhắn</option>
+                                            <option value="Đã thu tiền" {{ 'selected' if item.payment_status == 'Đã thu tiền' }}>Đã thu</option>
+                                        </select>
+                                    </form>
+                                </td>
+                                <td class="p-4 text-center">
+                                    <a href="/stop_service/standard/{{ item.id }}" onclick="return confirm('Dừng dịch vụ khách này?')" class="text-gray-400 hover:text-red-500 p-2 rounded-lg border border-gray-100 hover:border-red-100">
+                                        <i class="fas fa-times"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {% if current_user.role == 'admin' %}
+            <div id="view-master" class="hidden">
+                <div class="mb-6">
+                    <h2 class="text-xl font-bold text-gray-800">Danh Sách Khách Hàng Tổng Hợp</h2>
+                    <p class="text-sm text-gray-500">Lịch sử toàn bộ khách hàng (Bao gồm cả người đã ngưng dịch vụ)</p>
+                </div>
+                <div class="overflow-hidden rounded-xl border border-gray-200 shadow-sm bg-white">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-gray-50 text-gray-500 text-xs uppercase font-bold tracking-wider border-b border-gray-200">
+                                <th class="p-4 pl-6">Tên Khách Hàng</th>
+                                <th class="p-4">Gói Mua</th>
+                                <th class="p-4">Trạng Thái Hạn</th>
+                                <th class="p-4">Trạng Thái Dịch Vụ</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            {% for item in master_list %}
+                            <tr class="hover:bg-gray-50 bg-white">
+                                <td class="p-4 pl-6 font-bold text-gray-800">{{ item.name }}</td>
+                                <td class="p-4">
+                                    <span class="px-2.5 py-1 rounded-md text-xs font-medium border {{ 'bg-yellow-50 text-yellow-700 border-yellow-200' if item.package == 'Gói Cao Cấp' else 'bg-blue-50 text-blue-700 border-blue-200' }}">{{ item.package }}</span>
+                                </td>
+                                <td class="p-4">
+                                    {% if item.days_left < 0 %}
+                                    <span class="text-red-600 font-bold text-xs">Đã hết hạn</span>
+                                    {% else %}
+                                    <span class="text-green-600 font-bold text-xs">Còn hạn ({{ item.expiry.strftime('%d/%m') }})</span>
+                                    {% endif %}
+                                </td>
+                                <td class="p-4">
+                                    {% if item.is_active %}
+                                    <span class="px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-bold border border-green-200">Đang dùng</span>
+                                    {% else %}
+                                    <span class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-xs font-bold border border-gray-200">Đã ngưng</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                 </div>
+            </div>
+            {% endif %}
+
+            <div id="view-fetch" class="hidden">
+                <div class="max-w-5xl mx-auto">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                        <div>
+                            <h2 class="text-xl font-bold text-gray-800">Lấy tài khoản cho CTV</h2>
+                            <p class="text-sm text-gray-500 mt-1">Bấm lấy tài khoản để nhận 1 account từ kho admin đã import, sau đó dùng nút Đăng nhập TV.</p>
+                        </div>
+                        <div class="flex gap-3">
+                            <button type="button" id="btn-fetch-acc-ctv" onclick="openFetchModal()" class="bg-teal-600 hover:bg-teal-700 text-white px-6 py-3 rounded-lg text-sm font-bold shadow-md transition-all flex items-center gap-2">
+                                <i class="fas fa-wand-magic-sparkles"></i> Lấy tài khoản
+                            </button>
+                            <button type="button" onclick="openLoginTVModal()" class="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg text-sm font-bold shadow-md transition-all flex items-center gap-2">
+                                <i class="fas fa-tv"></i> Đăng nhập TV
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                        <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                            <h3 class="font-bold text-gray-800">Tài khoản bạn đã lấy</h3>
+                            <span class="text-xs bg-teal-100 text-teal-700 px-3 py-1 rounded-full font-bold">{{ my_fetched_accounts|length }} tài khoản</span>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full text-sm">
+                                <thead class="bg-gray-50 text-gray-500">
+                                    <tr>
+                                        <th class="px-4 py-3 text-left">Email</th>
+                                        <th class="px-4 py-3 text-left">Gói</th>
+                                        <th class="px-4 py-3 text-left">Người nhận</th>
+                                        <th class="px-4 py-3 text-left">Lúc lấy</th>
+                                        <th class="px-4 py-3 text-left">Được gửi lại sau</th>
+                                        <th class="px-4 py-3 text-left">Trạng thái</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                {% for acc in my_fetched_accounts %}
+                                <tr class="border-t border-gray-100">
+                                    <td class="px-4 py-3 font-semibold text-gray-800">{{ acc.email }}</td>
+                                    <td class="px-4 py-3">{{ acc.plan }}</td>
+                                    <td class="px-4 py-3">{{ acc.assigned_to or (current_user.full_name or current_user.username) }}</td>
+                                    <td class="px-4 py-3">{{ acc.assigned_at.strftime('%d/%m/%Y %H:%M') if acc.assigned_at else '' }}</td>
+                                    <td class="px-4 py-3">
+                                        {% if acc.next_recheck_at %}
+                                            {% if acc.days_until_resend == 0 %}
+                                                <span class="px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700 border border-green-200">
+                                                    Đến hạn gửi lại
+                                                </span>
+                                                <div class="text-[11px] text-gray-400 mt-1">
+                                                    {{ acc.next_recheck_at.strftime('%d/%m/%Y %H:%M') }}
+                                                </div>
+                                            {% elif acc.days_until_resend is not none %}
+                                                <span class="px-2 py-1 rounded-full text-xs font-bold bg-yellow-100 text-yellow-700 border border-yellow-200">
+                                                    Còn {{ acc.days_until_resend }} ngày
+                                                </span>
+                                                <div class="text-[11px] text-gray-400 mt-1">
+                                                    {{ acc.next_recheck_at.strftime('%d/%m/%Y %H:%M') }}
+                                                </div>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="text-gray-400 text-xs">Chưa có lịch</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="px-4 py-3">{{ acc.status }}</td>
+                                </tr>
+                                {% else %}
+                                <tr><td colspan="6" class="px-4 py-8 text-center text-gray-400">Bạn chưa lấy tài khoản nào.</td></tr>
+                                {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {% if current_user.role == 'admin' %}
+            <div id="view-users" class="hidden">
+                <div class="flex justify-between items-end mb-6 pb-4 border-b border-gray-100">
+                    <div>
+                        <h2 class="text-xl font-bold text-gray-800">Quản lý tài khoản đăng nhập</h2>
+                        <p class="text-sm text-gray-500 mt-1">Admin tạo tài khoản mới cho admin và CTV</p>
+                    </div>
+                    <div class="text-xs bg-rose-100 text-rose-700 px-3 py-1.5 rounded-full font-bold border border-rose-200 shadow-sm">{{ users|length }} tài khoản</div>
+                </div>
+
+                <div class="grid lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-1 bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+                        <h3 class="font-bold text-gray-800 mb-4">Tạo tài khoản mới</h3>
+                        <form action="{{ url_for('create_user') }}" method="POST" class="space-y-3">
+                            <input type="text" name="full_name" placeholder="Họ và tên" class="w-full border rounded-lg px-3 py-2.5 text-sm">
+                            <input type="text" name="username" placeholder="Username đăng nhập" required class="w-full border rounded-lg px-3 py-2.5 text-sm">
+                            <input type="password" name="password" placeholder="Mật khẩu" required class="w-full border rounded-lg px-3 py-2.5 text-sm">
+                            <select name="role" class="w-full border rounded-lg px-3 py-2.5 text-sm">
+                                <option value="ctv">CTV</option>
+                                <option value="tv">TV</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                            <button type="submit" class="w-full bg-rose-600 hover:bg-rose-700 text-white py-2.5 rounded-lg font-bold">Tạo tài khoản</button>
+                        </form>
+                    </div>
+                    <div class="lg:col-span-2 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full text-sm">
+                                <thead class="bg-gray-50 text-gray-600">
+                                    <tr>
+                                        <th class="px-4 py-3 text-left font-bold">Họ tên</th>
+                                        <th class="px-4 py-3 text-left font-bold">Username</th>
+                                        <th class="px-4 py-3 text-left font-bold">Role</th>
+                                        <th class="px-4 py-3 text-left font-bold">Trạng thái</th>
+                                        <th class="px-4 py-3 text-left font-bold">Tạo lúc</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for user in users %}
+                                    <tr class="border-t border-gray-100">
+                                        <td class="px-4 py-3 font-semibold text-gray-800">{{ user.full_name or '-' }}</td>
+                                        <td class="px-4 py-3">{{ user.username }}</td>
+                                        <td class="px-4 py-3"><span class="px-2 py-1 rounded-full text-xs font-bold {{ 'bg-red-100 text-red-700' if user.role == 'admin' else 'bg-blue-100 text-blue-700' }}">{{ user.role }}</span></td>
+                                        <td class="px-4 py-3">{{ 'Hoạt động' if user.active else 'Đã khóa' }}</td>
+                                        <td class="px-4 py-3">{{ user.created_at.strftime('%d/%m/%Y %H:%M') if user.created_at else '' }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="view-vault" class="hidden">
+                <div class="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-gray-100 pb-4">
+                    <div>
+                        <h2 class="text-xl font-bold text-gray-800">Kho Tài Khoản (Stock)</h2>
+                        <p class="text-sm text-gray-500 mt-1">Quản lý và lấy tài khoản chuẩn bị cấp cho khách</p>
+                    </div>
+
+                    <div class="flex flex-col md:flex-row gap-3 w-full md:w-auto">
+                        <select id="fetch_plan" class="bg-white border border-teal-200 text-teal-800 rounded-lg px-3 py-2.5 text-sm">
+                            <option value="">Tất cả gói</option>
+                            <option value="Premium">Premium</option>
+                            <option value="Standard">Standard</option>
+                            <option value="N/A">N/A</option>
+                        </select>
+
+                        <button type="button" id="btn-fetch-acc" onclick="openFetchModal()" class="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2.5 rounded-lg text-sm font-bold shadow-md transition-all flex items-center gap-2">
+                            <i class="fas fa-magic"></i> Lấy 1 Tài Khoản
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                    <div class="col-span-1 lg:col-span-3 bg-teal-50/50 p-5 rounded-xl border border-teal-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+                        <div>
+                            <h3 class="font-bold text-teal-800 flex items-center"><i class="fas fa-file-excel mr-2 text-xl"></i> Import File Excel</h3>
+                            <p class="text-xs text-teal-600 mt-1">File Excel yêu cầu 4 cột: <b>Email | Password | Plan | Cookies</b></p>
+                        </div>
+
+                        <form action="/import_excel" method="POST" enctype="multipart/form-data" class="flex gap-3 w-full md:w-auto">
+                            <input type="file" name="excel_file" accept=".xlsx, .xls" required class="w-full bg-white border border-teal-200 text-teal-800 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 outline-none file:mr-4 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100 cursor-pointer">
+                            <button type="submit" class="bg-gray-800 text-white px-6 py-2 rounded-lg text-sm font-bold hover:bg-gray-900 transition-all flex items-center gap-2 whitespace-nowrap shadow-md">
+                                <i class="fas fa-cloud-upload-alt"></i> Tải Lên
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="flex justify-between items-end mb-3 px-1">
+                    <h3 class="font-bold text-gray-700">Danh sách đang có trong kho:</h3>
+                    <div class="text-xs text-gray-500">Tổng: <b>{{ vault_accounts|length }}</b> tài khoản</div>
+                </div>
+
+                <div class="overflow-hidden rounded-xl border border-gray-200 shadow-sm bg-white">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-gray-50 text-gray-500 text-xs uppercase font-bold tracking-wider border-b border-gray-200">
+                                <th class="p-4 pl-6 w-1/4">Email / Password</th>
+                                <th class="p-4 w-1/6 text-center">Gói (Plan)</th>
+                                <th class="p-4 w-1/3">Cookies</th>
+                                <th class="p-4 text-center">Gửi lại sau</th>
+                                <th class="p-4 text-center">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            {% if vault_accounts|length == 0 %}
+                            <tr>
+                                <td colspan="5" class="p-8 text-center text-gray-400">
+                                    <i class="fas fa-box-open text-4xl mb-3 opacity-50"></i>
+                                    <p>Kho đang trống. Hãy upload file Excel để thêm tài khoản!</p>
+                                </td>
+                            </tr>
+                            {% else %}
+                                {% for acc in vault_accounts %}
+                                <tr class="hover:bg-gray-50 bg-white">
+                                    <td class="p-4 pl-6">
+                                        <div class="font-bold text-gray-900 text-sm">{{ acc.email }}</div>
+                                        <div class="text-xs text-red-500 font-mono mt-1">{{ acc.password }}</div>
+                                    </td>
+                                    <td class="p-4 text-center">
+                                        <span class="px-2.5 py-1 rounded-md text-xs font-bold border {{ 'bg-purple-100 text-purple-700 border-purple-200' if 'Premium' in acc.plan else 'bg-gray-100 text-gray-600 border-gray-200' }}">{{ acc.plan }}</span>
+                                    </td>
+                                    <td class="p-4">
+                                        <span class="text-xs text-gray-400 font-mono truncate max-w-[180px] block bg-gray-50 p-1 rounded border border-gray-100" title='{{ acc.cookies }}'>{{ acc.cookies[:25] }}{% if acc.cookies|length > 25 %}...{% endif %}</span>
+                                    </td>
+                                    <td class="p-4 text-center">
+                                        <!-- 👇 STATUS -->
+                                        {% if acc.status %}
+                                            <div class="mb-1">
+                                                <span class="px-2 py-1 rounded-full text-xs font-bold 
+                                                    {% if acc.status == 'Đã Live' %}
+                                                        bg-green-100 text-green-700 border border-green-200
+                                                    {% elif acc.status == 'Dead' %}
+                                                        bg-red-100 text-red-700 border border-red-200
+                                                    {% elif acc.status == 'Đã Cấp' %}
+                                                        bg-yellow-100 text-yellow-700 border border-yellow-200
+                                                    {% else %}
+                                                        bg-gray-100 text-gray-600 border border-gray-200
+                                                    {% endif %}
+                                                ">
+                                                    {{ acc.status }}
+                                                </span>
+                                            </div>
+                                        {% endif %}
+
+                                        <!-- 👇 COUNTDOWN -->
+                                        {% if acc.next_recheck_at %}
+                                            {% if acc.days_until_resend == 0 %}
+                                                <div class="text-[11px] font-bold text-green-600">
+                                                    Đến hạn gửi lại
+                                                </div>
+                                            {% elif acc.days_until_resend is not none %}
+                                                <div class="text-[11px] font-bold text-orange-600">
+                                                    Còn {{ acc.days_until_resend }} ngày
+                                                </div>
+                                            {% endif %}
+
+                                            <div class="text-[10px] text-gray-400">
+                                                {{ acc.next_recheck_at.strftime('%d/%m/%Y %H:%M') }}
+                                            </div>
+                                        {% else %}
+                                            <div class="text-xs text-gray-400">Chưa có lịch</div>
+                                        {% endif %}
+                                    </td>
+
+                                    <td class="p-4 text-center">
+                                        <button onclick="checkAccountNow({{ acc.id }})"
+                                                class="text-teal-600 hover:bg-teal-50 p-2 rounded-lg transition-colors border border-transparent hover:border-teal-200"
+                                                title="Check Live Ngay">
+                                            <i class="fas fa-play-circle text-lg"></i>
+                                        </button>
+
+                                        <button onclick="resetVaultAccount({{ acc.id }})"
+                                                class="text-orange-500 hover:bg-orange-50 p-2 rounded-lg transition-colors border border-transparent hover:border-orange-200 ml-1"
+                                                title="Reset về chưa check">
+                                            <i class="fas fa-rotate-left"></i>
+                                        </button>
+
+                                        <a href="/delete_vault/{{ acc.id }}"
+                                        onclick="return confirm('Xóa tài khoản này khỏi kho?')"
+                                        class="text-red-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors ml-1 inline-block"
+                                        title="Xóa khỏi kho">
+                                            <i class="fas fa-trash-alt"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div id="modalAddSlot" class="fixed inset-0 bg-black/60 hidden backdrop-blur-sm z-50 flex items-center justify-center">
+        <div class="bg-white rounded-2xl shadow-2xl w-96 p-6">
+            <h3 class="text-lg font-bold mb-4">Thêm Khách Vào Slot</h3>
+            <p class="text-xs text-gray-500 mb-4 bg-blue-50 p-2 rounded">Acc: <span id="modalEmailLabel" class="font-bold">...</span></p>
+            <form id="formAddSlot" action="" method="POST" class="space-y-4">
+                <input type="text" name="customer_name" placeholder="Tên khách" required class="w-full border rounded-lg px-3 py-2 text-sm">
+                <div class="grid grid-cols-2 gap-3">
+                    <input type="text" name="profile_name" placeholder="Profile" required class="w-full border rounded-lg px-3 py-2 text-sm">
+                    <select name="source" class="w-full border rounded-lg px-3 py-2 text-sm">
+                        <option>Zalo</option>
+                        <option>Facebook</option>
+                        <option>Instagram</option>
+                    </select>
+                </div>
+                <input type="text" name="contact_link" placeholder="SĐT / Link liên kết (Không bắt buộc)" class="w-full border rounded-lg px-3 py-2 text-sm mt-2">
+                <input type="date" name="expiry_date" required class="w-full border rounded-lg px-3 py-2 text-sm">
+                <div class="flex gap-2 pt-2">
+                    <button type="button" onclick="document.getElementById('modalAddSlot').classList.add('hidden')" class="w-1/3 bg-gray-100 rounded-lg py-2">Huỷ</button>
+                    <button type="submit" class="w-2/3 bg-blue-600 text-white rounded-lg py-2">Lưu</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="modalEditSlot" class="fixed inset-0 bg-black/60 hidden backdrop-blur-sm z-50 flex items-center justify-center">
+        <div class="bg-white rounded-2xl shadow-2xl w-96 p-6">
+            <h3 class="text-lg font-bold mb-4 text-gray-800">Sửa Thông Tin Khách</h3>
+            <form id="formEditSlot" action="" method="POST" class="space-y-4">
+                <div>
+                    <label class="text-xs font-bold text-gray-600">Tên Khách</label>
+                    <input type="text" id="edit_name" name="customer_name" required class="w-full border rounded-lg px-3 py-2 text-sm">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-xs font-bold text-gray-600">Profile</label>
+                        <input type="text" id="edit_profile" name="profile_name" required class="w-full border rounded-lg px-3 py-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-gray-600">Nguồn</label>
+                        <select id="edit_source" name="source" class="w-full border rounded-lg px-3 py-2 text-sm">
+                            <option>Zalo</option>
+                            <option>Facebook</option>
+                            <option>Instagram</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-gray-600">SĐT / Link liên kết</label>
+                    <input type="text" id="edit_link" name="contact_link" placeholder="Nhập SĐT / Link" class="w-full border rounded-lg px-3 py-2 text-sm mt-1">
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-gray-600">Hết Hạn</label>
+                    <input type="date" id="edit_expiry" name="expiry_date" required class="w-full border rounded-lg px-3 py-2 text-sm">
+                </div>
+                <div class="flex gap-2 pt-2">
+                    <button type="button" onclick="document.getElementById('modalEditSlot').classList.add('hidden')" class="w-1/3 bg-gray-100 rounded-lg py-2">Huỷ</button>
+                    <button type="submit" class="w-2/3 bg-green-600 text-white rounded-lg py-2">Cập nhật</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="modalEditAcc" class="fixed inset-0 bg-black/60 hidden backdrop-blur-sm z-50 flex items-center justify-center">
+        <div class="bg-white rounded-2xl shadow-2xl w-96 p-6">
+            <h3 class="text-lg font-bold mb-4 text-gray-800">Sửa Email Nhóm (Master)</h3>
+            <form id="formEditAcc" action="" method="POST" class="space-y-4">
+                <div>
+                    <label class="text-xs font-bold text-gray-600">Email mới</label>
+                    <input type="email" id="edit_acc_email" name="email" required class="w-full border rounded-lg px-3 py-2 text-sm mt-1">
+                </div>
+                <div class="flex gap-2 pt-2">
+                    <button type="button" onclick="document.getElementById('modalEditAcc').classList.add('hidden')" class="w-1/3 bg-gray-100 rounded-lg py-2">Huỷ</button>
+                    <button type="submit" class="w-2/3 bg-blue-600 text-white rounded-lg py-2">Cập nhật</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="modalFetchAccount" class="fixed inset-0 bg-black/60 hidden backdrop-blur-sm z-50 flex items-center justify-center">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 relative">
+            <button onclick="document.getElementById('modalFetchAccount').classList.add('hidden')" class="absolute top-4 right-4 text-gray-400 hover:text-red-500 transition-colors">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+
+            <h3 class="text-xl font-bold mb-2 text-teal-800 flex items-center">
+                <i class="fas fa-check-circle mr-2 text-green-500"></i> Lấy tài khoản thành công!
+            </h3>
+            <p class="text-sm text-gray-500 mb-6">Tài khoản này đã được lấy từ kho thật.</p>
+
+            <input type="hidden" id="fetch_account_id">
+
+            <div class="space-y-4">
+                <div>
+                    <label class="text-xs font-bold text-gray-600 mb-1 block">Email</label>
+                    <div class="flex">
+                        <input type="text" id="fetch_email" value="" readonly class="w-full border border-gray-200 bg-gray-50 rounded-l-lg px-3 py-2.5 text-sm font-bold text-gray-800 focus:outline-none">
+                        <button onclick="copyToClipboard('fetch_email')" class="bg-teal-50 hover:bg-teal-100 px-4 rounded-r-lg border border-l-0 border-teal-200 transition-colors text-teal-700" title="Copy Email">
+                            <i class="far fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="text-xs font-bold text-gray-600 mb-1 block">Password</label>
+                    <div class="flex">
+                        <input type="text" id="fetch_pass" value="" readonly class="w-full border border-gray-200 bg-gray-50 rounded-l-lg px-3 py-2.5 text-sm font-bold text-red-600 focus:outline-none">
+                        <button onclick="copyToClipboard('fetch_pass')" class="bg-teal-50 hover:bg-teal-100 px-4 rounded-r-lg border border-l-0 border-teal-200 transition-colors text-teal-700" title="Copy Password">
+                            <i class="far fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="text-xs font-bold text-gray-600 mb-1 block">Cookies</label>
+                    <div class="flex">
+                        <input type="text" id="fetch_cookie" value="" readonly class="w-full border border-gray-200 bg-gray-50 rounded-l-lg px-3 py-2.5 text-xs font-mono text-gray-500 focus:outline-none truncate">
+                        <button onclick="copyToClipboard('fetch_cookie')" class="bg-teal-50 hover:bg-teal-100 px-4 rounded-r-lg border border-l-0 border-teal-200 transition-colors text-teal-700" title="Copy Cookie">
+                            <i class="far fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="text-xs font-bold text-gray-600 mb-1 block">Người nhận / Ghi chú</label>
+                    <input type="text" id="fetch_assigned_to" placeholder="Ví dụ: Khách A / Admin B" class="w-full border border-gray-200 bg-white rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400">
+                </div>
+            </div>
+
+            <div class="mt-8 flex gap-3">
+                <button onclick="document.getElementById('modalFetchAccount').classList.add('hidden')" class="w-1/3 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2.5 rounded-lg font-bold transition-all">
+                    Đóng
+                </button>
+                <button onclick="useFetchedAccount()" class="w-2/3 bg-teal-600 hover:bg-teal-700 text-white py-2.5 rounded-lg font-bold shadow-md transition-all">
+                    Sử dụng Acc này
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="modalLoginTV" class="fixed inset-0 bg-black/60 hidden backdrop-blur-sm z-50 flex items-center justify-center">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 relative">
+            <button onclick="closeLoginTVModal()" class="absolute top-4 right-4 text-gray-400 hover:text-red-500 transition-colors">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+
+            <h3 class="text-xl font-bold mb-2 text-red-600 flex items-center">
+                <i class="fas fa-tv mr-2"></i> Đăng nhập TV
+            </h3>
+            <p class="text-sm text-gray-500 mb-6">Hệ thống sẽ tự tìm Cookie còn sống và cấp quyền TV cho bạn.</p>
+
+            <div>
+                <label class="text-xs font-bold text-gray-600 mb-1 block">Mã TV (8 số/ký tự)</label>
+                <input type="text" id="tv_code_input" maxlength="10" placeholder="VD: 1234 5678" class="w-full border border-gray-300 bg-gray-50 rounded-lg px-4 py-3 text-lg font-bold text-center tracking-widest uppercase focus:outline-none focus:ring-2 focus:ring-red-400">
+            </div>
+
+            <div class="mt-8 flex gap-3">
+                <button onclick="closeLoginTVModal()" class="w-1/3 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2.5 rounded-lg font-bold transition-all">
+                    Đóng
+                </button>
+                <button id="btn_submit_tv" onclick="submitTVCode()" class="w-2/3 bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-lg font-bold shadow-md transition-all flex justify-center items-center">
+                    Duyệt Mã Ngay
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function switchTab(id) {
+            ['view-todo', 'view-premium', 'view-standard', 'view-fetch', 'view-master', 'view-vault', 'view-users'].forEach(v => {
+                let el = document.getElementById(v);
+                if (el) el.classList.add('hidden');
+            });
+
+            let targetEl = document.getElementById(id);
+            if (targetEl) targetEl.classList.remove('hidden');
+
+            const btns = {
+                'btn-todo': 'border-purple-600 text-purple-700 bg-white',
+                'btn-premium': 'border-yellow-500 text-yellow-600 bg-white',
+                'btn-standard': 'border-blue-500 text-blue-600 bg-white',
+                'btn-fetch': 'border-teal-500 text-teal-600 bg-white',
+                'btn-master': 'border-gray-500 text-gray-600 bg-white',
+                'btn-vault': 'border-teal-500 text-teal-600 bg-white',
+                'btn-users': 'border-rose-500 text-rose-600 bg-white'
+            };
+
+            Object.keys(btns).forEach(b => {
+                let btnEl = document.getElementById(b);
+                if (btnEl) {
+                    if (b.replace('btn', 'view') === id) {
+                        btnEl.className = `py-4 px-4 md:px-6 cursor-pointer tab-active flex items-center gap-2 rounded-t-lg transition-all ${btns[b]}`;
+                    } else {
+                        btnEl.className = 'py-4 px-4 md:px-6 cursor-pointer tab-inactive border-transparent hover:text-gray-800 flex items-center gap-2 rounded-t-lg transition-all text-gray-500';
+                    }
+                }
+            });
+
+            localStorage.setItem('activeNetflixTab', id);
+
+            if (history.pushState) {
+                history.pushState(null, null, '#' + id);
+            } else {
+                window.location.hash = '#' + id;
+            }
+        }
+
+        function openAddModal(accId, email) {
+            document.getElementById('formAddSlot').action = "/add_premium_slot/" + accId;
+            document.getElementById('modalEmailLabel').innerText = email;
+            document.getElementById('modalAddSlot').classList.remove('hidden');
+        }
+
+        function openEditModal(id, name, profile, source, expiry, link) {
+            document.getElementById('formEditSlot').action = "/edit_premium_slot/" + id;
+            document.getElementById('edit_name').value = name;
+            document.getElementById('edit_profile').value = profile;
+            document.getElementById('edit_source').value = source;
+            document.getElementById('edit_expiry').value = expiry;
+            document.getElementById('edit_link').value = link || '';
+            document.getElementById('modalEditSlot').classList.remove('hidden');
+        }
+
+        function openEditAccModal(id, currentEmail) {
+            document.getElementById('formEditAcc').action = "/edit_premium_acc/" + id;
+            document.getElementById('edit_acc_email').value = currentEmail;
+            document.getElementById('modalEditAcc').classList.remove('hidden');
+        }
+
+        async function openFetchModal() {
+            const btn = document.activeElement && (document.activeElement.id === 'btn-fetch-acc' || document.activeElement.id === 'btn-fetch-acc-ctv')
+                ? document.activeElement
+                : (document.getElementById('btn-fetch-acc') || document.getElementById('btn-fetch-acc-ctv'));
+            const originalHTML = btn ? btn.innerHTML : '';
+            const planSelect = document.getElementById('fetch_plan');
+            const plan = planSelect ? planSelect.value : 'Premium';
+
+            if (btn) {
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang lấy tài khoản...';
+                btn.disabled = true;
+                btn.classList.add('opacity-75', 'cursor-not-allowed');
+            }
+
+            try {
+                const res = await fetch('/fetch_account', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ plan })
+                });
+
+                const data = await res.json();
+
+                if (!data.success) {
+                    showToastMessage(data.message || 'Không lấy được tài khoản');
+                    return;
+                }
+
+                const acc = data.account;
+
+                document.getElementById('fetch_account_id').value = acc.id || '';
+                document.getElementById('fetch_email').value = acc.email || '';
+                document.getElementById('fetch_pass').value = acc.password || '';
+                document.getElementById('fetch_cookie').value = acc.cookies || '';
+                document.getElementById('fetch_assigned_to').value = '';
+
+                document.getElementById('modalFetchAccount').classList.remove('hidden');
+            } catch (err) {
+                console.error(err);
+                showToastMessage('Có lỗi khi gọi server!');
+            } finally {
+                if (btn) {
+                    btn.innerHTML = originalHTML;
+                    btn.disabled = false;
+                    btn.classList.remove('opacity-75', 'cursor-not-allowed');
+                }
+            }
+        }
+
+        async function useFetchedAccount() {
+            const accId = document.getElementById('fetch_account_id').value;
+            const assignedTo = document.getElementById('fetch_assigned_to').value.trim();
+
+            if (!accId) {
+                showToastMessage('Không có tài khoản để sử dụng');
+                return;
+            }
+
+            try {
+                const res = await fetch(`/assign_account/${accId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ assigned_to: assignedTo })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    showToastMessage(data.message || 'Đã cấp tài khoản');
+                    document.getElementById('modalFetchAccount').classList.add('hidden');
+                    setTimeout(() => window.location.reload(), 700);
+                } else {
+                    showToastMessage(data.message || 'Không thể cấp tài khoản');
+                }
+            } catch (err) {
+                console.error(err);
+                showToastMessage('Lỗi server khi cấp tài khoản');
+            }
+        }
+
+        async function resetVaultAccount(id) {
+            if (!confirm('Reset tài khoản này về trạng thái chưa check?')) return;
+
+            try {
+                const res = await fetch(`/reset_vault/${id}`, {
+                    method: 'POST'
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    showToastMessage(data.message || 'Đã reset tài khoản');
+                    setTimeout(() => window.location.reload(), 500);
+                } else {
+                    showToastMessage(data.message || 'Không thể reset tài khoản');
+                }
+            } catch (err) {
+                console.error(err);
+                showToastMessage('Lỗi khi reset tài khoản');
+            }
+        }
+
+        async function checkAccountNow(id) {
+            try {
+                const res = await fetch(`/check_account/${id}`, { method: 'POST' });
+                const data = await res.json();
+
+                if (data.success) {
+                    showToastMessage(data.message || 'Check thành công');
+                    setTimeout(() => window.location.reload(), 500);
+                } else {
+                    showToastMessage(data.message || 'Check thất bại');
+                }
+            } catch (err) {
+                console.error(err);
+                showToastMessage('Lỗi khi check account');
+            }
+        }
+
+        function copyToClipboard(inputId) {
+            const copyText = document.getElementById(inputId);
+            copyText.select();
+            copyText.setSelectionRange(0, 99999);
+            navigator.clipboard.writeText(copyText.value);
+            showToastMessage('Đã copy thành công!');
+        }
+
+        function copyAndStatus(name, days, type, id) {
+            let msg = days === 0
+                ? `Em chào anh/chị ${name}, tài khoản của anh/chị hết hạn trong hôm nay, anh chị gia hạn thêm không ạ.`
+                : days < 0
+                    ? `Em chào anh/chị ${name}, tài khoản của anh/chị đã hết hạn được ${Math.abs(days)} ngày, anh chị gia hạn thêm không ạ.`
+                    : `Em chào anh/chị ${name}, tài khoản của anh/chị còn ${days} ngày nữa hết hạn, anh chị gia hạn thêm không ạ.`;
+
+            navigator.clipboard.writeText(msg).then(() => {
+                fetch(`/update_status/${type}/${id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ payment_status: 'Đã gửi tin nhắn' })
+                }).then(response => {
+                    if (response.ok) {
+                        const select = document.getElementById(`status-select-${type}-${id}`);
+                        if (select) {
+                            select.value = 'Đã gửi tin nhắn';
+                            select.className = select.className
+                                .replace('bg-gray-100 text-gray-600', 'bg-blue-100 text-blue-700')
+                                .replace('border-gray-200', 'border-blue-200');
+                        }
+                    }
+                });
+                showToastMessage('Đã copy tin nhắn & Đổi trạng thái sang: Đã nhắn!');
+            });
+        }
+
+        function updateStatusAJAX(type, id, value, selectElement) {
+            fetch(`/update_status/${type}/${id}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ payment_status: value })
+            }).then(res => res.json()).then(data => {
+                if (data.success) {
+                    selectElement.className = selectElement.className
+                        .replace(/bg-\w+-100/g, '')
+                        .replace(/bg-\w+-50/g, '')
+                        .replace(/text-\w+-700/g, '')
+                        .replace(/text-\w+-600/g, '')
+                        .replace(/border-\w+-200/g, '');
+
+                    if (value === 'Đã thu tiền') {
+                        selectElement.classList.add('bg-green-100', 'text-green-700', 'border-green-200');
+                    } else if (value === 'Đã gửi tin nhắn') {
+                        selectElement.classList.add('bg-blue-100', 'text-blue-700', 'border-blue-200');
+                    } else {
+                        selectElement.classList.add('bg-gray-100', 'text-gray-600', 'border-gray-200');
+                    }
+
+                    showToastMessage('Đã cập nhật trạng thái thu tiền!');
+                }
+            });
+        }
+
+        function quickRenewAJAX(event, type, id, formElement) {
+            event.preventDefault();
+            if (!confirm('Xác nhận gia hạn khách hàng này?')) return;
+
+            fetch(`/quick_renew/${type}/${id}`, {
+                method: 'POST',
+                headers: { 'Fetch-Mode': 'true' },
+                body: new FormData(formElement)
+            }).then(res => res.json()).then(data => {
+                if (data.success) {
+                    let card = document.getElementById(`todo-card-${type}-${id}`);
+                    if (card) {
+                        card.style.opacity = '0.4';
+                        card.style.pointerEvents = 'none';
+                    }
+                    showToastMessage(data.msg);
+                }
+            });
+        }
+
+        // ---------- CÁC HÀM XỬ LÝ LOGIN TV ----------
+        function openLoginTVModal() {
+            document.getElementById('tv_code_input').value = '';
+            document.getElementById('modalLoginTV').classList.remove('hidden');
+            setTimeout(() => document.getElementById('tv_code_input').focus(), 100);
+        }
+
+        function closeLoginTVModal() {
+            document.getElementById('modalLoginTV').classList.add('hidden');
+        }
+
+        async function submitTVCode() {
+            const codeInput = document.getElementById('tv_code_input');
+            const btn = document.getElementById('btn_submit_tv');
+            const tvCode = codeInput.value.replace(/\s/g, '').trim(); 
+
+            if (tvCode.length !== 8) {
+                showToastMessage('Mã TV phải chứa đúng 8 ký tự!');
+                codeInput.focus();
+                return;
+            }
+
+            const originalBtnHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Đang duyệt...';
+            btn.disabled = true;
+            btn.classList.add('opacity-75', 'cursor-not-allowed');
+
+            try {
+                const res = await fetch('/login_tv_code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tv_code: tvCode })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    showToastMessage(data.message);
+                    closeLoginTVModal();
+                    setTimeout(() => window.location.reload(), 2000); 
+                } else {
+                    showToastMessage(data.message);
+                }
+            } catch (err) {
+                console.error(err);
+                showToastMessage('Có lỗi máy chủ xảy ra!');
+            } finally {
+                btn.innerHTML = originalBtnHTML;
+                btn.disabled = false;
+                btn.classList.remove('opacity-75', 'cursor-not-allowed');
+            }
+        }
+        // ---------------------------------------------
+
+        function showToastMessage(text) {
+            const toast = document.createElement('div');
+            toast.className = 'fixed bottom-5 right-5 bg-gray-800 text-white px-5 py-3 rounded-lg shadow-2xl text-sm z-50 animate-bounce font-bold flex items-center z-[9999]';
+            toast.innerHTML = `<i class="fas fa-check-circle text-green-400 mr-2 text-lg"></i> ${text}`;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 2500);
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            let hashTab = window.location.hash.substring(1);
+            let savedTab = localStorage.getItem('activeNetflixTab');
+
+            let tabToOpen = 'view-todo';
+
+            if (hashTab && ['view-todo', 'view-premium', 'view-standard', 'view-fetch', 'view-master', 'view-vault', 'view-users'].includes(hashTab)) {
+                tabToOpen = hashTab;
+            } else if (savedTab) {
+                tabToOpen = savedTab;
+            }
+
+            switchTab(tabToOpen);
+        });
+    </script>
+</body>
+</html>
