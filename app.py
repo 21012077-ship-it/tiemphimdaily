@@ -18,9 +18,15 @@ if not os.path.exists("instance"):
     os.makedirs("instance")
 
 
+import os
+
+os.makedirs(app.instance_path, exist_ok=True)
+
+db_path = os.path.join(app.instance_path, "netflix_manager_final.db")
+
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
     "DATABASE_URL",
-    "sqlite:///instance/netflix_manager_final.db"
+    f"sqlite:///{db_path}"
 )
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SESSION_COOKIE_HTTPONLY'] = True
