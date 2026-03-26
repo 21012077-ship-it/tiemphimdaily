@@ -152,6 +152,7 @@ def not_tv_required(func):
         return func(*args, **kwargs)
     return wrapper
 
+
 def create_default_admin():
     admin_username = os.environ.get('ADMIN_USERNAME', 'admin')
     admin_password = os.environ.get('ADMIN_PASSWORD', 'admin123')
@@ -299,7 +300,6 @@ def format_vault_status(acc, include_secrets=False):
             days = diff.days
             hours = diff.seconds // 3600
 
-            # Nếu muốn hiển thị mềm hơn
             if days > 0:
                 remaining_days = days
                 remaining_text = f"Còn {days} ngày"
@@ -321,6 +321,7 @@ def format_vault_status(acc, include_secrets=False):
         "remaining_days": remaining_days,
         "remaining_text": remaining_text
     }
+
 
 def parse_cookie_blob(cookie_text):
     if not cookie_text:
@@ -860,6 +861,22 @@ def delete_premium_acc(item_id):
     return redirect(url_for('index'))
 
 
+def normalize_plan(plan_raw):
+    if not plan_raw:
+        return "Unknown Plan"
+
+    p = str(plan_raw).strip().lower()
+
+    if "premium" in p or p in ["pre", "premium no ads"]:
+        return "Premium"
+    if "standard" in p:
+        return "Standard"
+    if "basic" in p:
+        return "Basic"
+
+    return str(plan_raw).strip() or "Unknown Plan"
+
+
 @app.route('/import_excel', methods=['POST'])
 @login_required
 @admin_required
@@ -882,10 +899,16 @@ def import_excel():
                 if row[0] and row[1]:
                     email = str(row[0]).strip()
                     password = str(row[1]).strip()
-                    plan = str(row[2]).strip() if len(row) > 2 and row[2] else 'N/A'
+                    plan = normalize_plan(row[2]) if len(row) > 2 else "Unknown Plan"
                     cookies = str(row[3]).strip() if len(row) > 3 and row[3] else ''
                     if not AccountVault.query.filter_by(email=email).first():
-                        new_acc = AccountVault(email=email, password=password, plan=plan, cookies=cookies, status='Chưa Check')
+                        new_acc = AccountVault(
+                            email=email,
+                            password=password,
+                            plan=plan,
+                            cookies=cookies,
+                            status='Chưa Check'
+                        )
                         db.session.add(new_acc)
                         count += 1
             db.session.commit()
@@ -926,6 +949,7 @@ def check_account(item_id):
 
 @app.route('/fetch_account', methods=['POST'])
 @login_required
+@not_tv_required
 def fetch_account():
     try:
         data = request.get_json(silent=True) or {}
@@ -934,10 +958,12 @@ def fetch_account():
         query = AccountVault.query.filter(
             AccountVault.status.in_(['Offline', 'Chưa Check', 'Đã Live'])
         )
-        query = query.filter(
-            (AccountVault.assigned_to_user_id.is_(None)) |
-            (AccountVault.assigned_to_user_id == current_user.id)
-        )
+
+        if current_user.role != 'admin':
+            query = query.filter(
+                (AccountVault.assigned_to_user_id.is_(None)) |
+                (AccountVault.assigned_to_user_id == current_user.id)
+            )
 
         if plan:
             query = query.filter(AccountVault.plan.ilike(f"%{plan}%"))
@@ -953,15 +979,24 @@ def fetch_account():
         for acc in candidates:
             is_live, check_msg = check_netflix_cookie_live(acc.cookies)
             acc.last_checked_at = datetime.now()
-            acc.status = 'Đã Live' if is_live else 'Dead'
-            db.session.commit()
 
             if is_live:
+                now = datetime.now()
+                acc.status = 'Đã Cấp'
+                acc.assigned_to_user_id = current_user.id
+                acc.assigned_to = current_user.full_name or current_user.username
+                acc.assigned_at = now
+                acc.next_recheck_at = now + timedelta(days=10)
+                db.session.commit()
+
                 return jsonify({
                     'success': True,
                     'message': f'Lấy tài khoản thành công. {check_msg}',
                     'account': format_vault_status(acc, include_secrets=True)
                 })
+
+            acc.status = 'Dead'
+            db.session.commit()
 
         return jsonify({
             'success': False,
@@ -986,7 +1021,6 @@ def login_tv_code():
 
     query = AccountVault.query.filter(AccountVault.status.in_(['Offline', 'Chưa Check', 'Đã Live']))
 
-    # tv cũng chỉ được dùng account rỗng hoặc account đã assign cho chính họ
     if current_user.role != 'admin':
         query = query.filter((AccountVault.assigned_to_user_id.is_(None)) | (AccountVault.assigned_to_user_id == current_user.id))
 
