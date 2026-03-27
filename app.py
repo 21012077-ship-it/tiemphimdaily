@@ -120,6 +120,16 @@ class AccountVault(db.Model):
         return diff.days
 
 
+class ActivityLog(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, nullable=True)
+    username = db.Column(db.String(100), default='')
+    role = db.Column(db.String(20), default='')
+    action = db.Column(db.String(120), nullable=False)
+    detail = db.Column(db.Text, default='')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+
 @login_manager.user_loader
 def load_user(user_id):
     return db.session.get(User, int(user_id))
@@ -368,6 +378,23 @@ def convert_cookies_for_playwright(raw_cookies):
     return converted
 
 
+def log_activity(action, detail=''):
+    if not current_user.is_authenticated:
+        return
+    try:
+        db.session.add(ActivityLog(
+            user_id=current_user.id,
+            username=current_user.full_name or current_user.username,
+            role=current_user.role,
+            action=action,
+            detail=detail
+        ))
+        db.session.commit()
+    except Exception as ex:
+        db.session.rollback()
+        print(f"[ACTIVITY] log failed: {ex}")
+
+
 def check_netflix_cookie_live(cookie_text):
     raw_cookies = parse_cookie_blob(cookie_text)
     cookies = convert_cookies_for_playwright(raw_cookies)
@@ -526,6 +553,7 @@ def login():
             return render_template('login.html')
 
         login_user(user)
+        log_activity('Đăng nhập', f"Tài khoản {user.username} đăng nhập hệ thống")
         flash(f'Đăng nhập thành công. Xin chào {user.full_name or user.username}!', 'success')
 
         if user.role == 'tv':
@@ -568,6 +596,7 @@ def create_user():
     user.set_password(password)
     db.session.add(user)
     db.session.commit()
+    log_activity('Tạo tài khoản', f"Tạo user {username} với quyền {role}")
     flash(f'Đã tạo tài khoản {role.upper()} cho {username}.', 'success')
     return redirect(url_for('index') + '#view-users')
 
@@ -654,6 +683,7 @@ def index():
     vault_accounts = AccountVault.query.order_by(AccountVault.id.desc()).all() if current_user.role == 'admin' else []
     my_fetched_accounts = AccountVault.query.filter_by(assigned_to_user_id=current_user.id).order_by(AccountVault.assigned_at.desc()).all() if current_user.role != 'admin' else []
     users = User.query.order_by(User.created_at.desc()).all() if current_user.role == 'admin' else []
+    activity_logs = ActivityLog.query.order_by(ActivityLog.created_at.desc()).limit(200).all() if current_user.role == 'admin' else []
 
     return render_template(
         'index.html',
@@ -664,6 +694,7 @@ def index():
         vault_accounts=vault_accounts,
         my_fetched_accounts=my_fetched_accounts,
         users=users,
+        activity_logs=activity_logs,
         today=date.today()
     )
 
@@ -678,6 +709,7 @@ def stop_service(type, item_id):
         return denied
     item.active = False
     db.session.commit()
+    log_activity('Ngừng dịch vụ', f"{'Gói phổ thông' if type == 'standard' else 'Slot premium'}: {item.customer_name}")
     flash(f'Đã chuyển "{item.customer_name}" sang danh sách lưu trữ.', 'warning')
     return redirect(url_for('index'))
 
@@ -717,6 +749,7 @@ def update_status(type, item_id):
 
     item.payment_status = new_status
     db.session.commit()
+    log_activity('Cập nhật trạng thái thu tiền', f"{item.customer_name}: {new_status}")
 
     if request.is_json:
         return jsonify({'success': True})
@@ -744,6 +777,7 @@ def quick_renew(type, item_id):
     item.payment_status = 'Chưa thu'
     item.active = True
     db.session.commit()
+    log_activity('Gia hạn nhanh', f"{item.customer_name}: +{months} tháng")
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.headers.get('Fetch-Mode') == 'true':
         return jsonify({'success': True, 'msg': f'Đã gia hạn {months} tháng cho {item.customer_name}'})
@@ -789,15 +823,17 @@ def edit_premium_acc(item_id):
 @login_required
 @not_tv_required
 def add_standard():
-    db.session.add(StandardSub(
+    item = StandardSub(
         customer_name=request.form['name'],
         source=request.form['source'],
         contact_link=request.form.get('contact_link', ''),
         expiry_date=datetime.strptime(request.form['expiry_date'], '%Y-%m-%d').date(),
         created_by_user_id=current_user.id,
         created_by_name=current_user.full_name or current_user.username
-    ))
+    )
+    db.session.add(item)
     db.session.commit()
+    log_activity('Thêm gói phổ thông', f"Khách: {item.customer_name} - Nguồn: {item.source}")
     return redirect(url_for('index'))
 
 
@@ -829,7 +865,7 @@ def add_premium_slot(acc_id):
     if active_slots >= 5:
         flash('Tài khoản này đã đủ 5 slot active.', 'error')
         return redirect(url_for('index') + '#view-premium')
-    db.session.add(PremiumSlot(
+    slot = PremiumSlot(
         account_id=acc_id,
         customer_name=request.form['customer_name'],
         profile_name=request.form['profile_name'],
@@ -838,8 +874,10 @@ def add_premium_slot(acc_id):
         expiry_date=datetime.strptime(request.form['expiry_date'], '%Y-%m-%d').date(),
         created_by_user_id=current_user.id,
         created_by_name=current_user.full_name or current_user.username
-    ))
+    )
+    db.session.add(slot)
     db.session.commit()
+    log_activity('Thêm slot premium', f"Khách: {slot.customer_name} - Profile: {slot.profile_name} - Acc: {acc.email}")
     return redirect(url_for('index') + '#view-premium')
 
 
@@ -988,6 +1026,7 @@ def fetch_account():
                 acc.assigned_at = now
                 acc.next_recheck_at = now + timedelta(days=10)
                 db.session.commit()
+                log_activity('Lấy account kho', f"Lấy {acc.email} - Plan: {acc.plan}")
 
                 return jsonify({
                     'success': True,
@@ -1042,6 +1081,7 @@ def login_tv_code():
                 acc.assigned_at = datetime.now()
 
             db.session.commit()
+            log_activity('Duyệt mã TV', f"Thành công với account {acc.email} và mã {tv_code}")
             return jsonify({'success': True, 'message': f'Duyệt TV thành công trên Email: {acc.email}! {msg}'})
 
         elif "chết" in msg.lower() or "login" in msg.lower():
@@ -1079,6 +1119,7 @@ def assign_account(item_id):
     acc.assigned_at = now
     acc.next_recheck_at = now + timedelta(days=10)
     db.session.commit()
+    log_activity('Cấp account thủ công', f"Cấp {acc.email} cho {assigned_to}")
     return jsonify({'success': True, 'message': f'Đã cấp tài khoản {acc.email}', 'account': format_vault_status(acc, include_secrets=True)})
 
 
