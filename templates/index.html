@@ -74,6 +74,9 @@
                 <div id="btn-users" onclick="switchTab('view-users')" class="py-4 px-4 md:px-6 cursor-pointer tab-inactive border-transparent hover:text-gray-800 flex items-center gap-2 rounded-t-lg transition-all">
                     <i class="fas fa-users text-rose-500 text-lg"></i> <span>Tài Khoản Hệ Thống</span>
                 </div>
+                <div id="btn-activity" onclick="switchTab('view-activity')" class="py-4 px-4 md:px-6 cursor-pointer tab-inactive border-transparent hover:text-gray-800 flex items-center gap-2 rounded-t-lg transition-all">
+                    <i class="fas fa-chart-line text-amber-500 text-lg"></i> <span>Hoạt Động CTV/TV</span>
+                </div>
                 {% endif %}
             </div>
         </div>
@@ -507,6 +510,47 @@
                     </div>
                 </div>
             </div>
+
+            <div id="view-activity" class="hidden">
+                <div class="flex justify-between items-end mb-6 pb-4 border-b border-gray-100">
+                    <div>
+                        <h2 class="text-xl font-bold text-gray-800">Nhật ký hoạt động CTV/TV</h2>
+                        <p class="text-sm text-gray-500 mt-1">Admin theo dõi thao tác đăng nhập, lấy account, gia hạn, cập nhật trạng thái...</p>
+                    </div>
+                    <div class="text-xs bg-amber-100 text-amber-700 px-3 py-1.5 rounded-full font-bold border border-amber-200 shadow-sm">{{ activity_logs|length }} bản ghi mới nhất</div>
+                </div>
+
+                <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full text-sm">
+                            <thead class="bg-gray-50 text-gray-600">
+                                <tr>
+                                    <th class="px-4 py-3 text-left font-bold">Thời gian</th>
+                                    <th class="px-4 py-3 text-left font-bold">Nhân sự</th>
+                                    <th class="px-4 py-3 text-left font-bold">Role</th>
+                                    <th class="px-4 py-3 text-left font-bold">Hành động</th>
+                                    <th class="px-4 py-3 text-left font-bold">Chi tiết</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for log in activity_logs %}
+                                <tr class="border-t border-gray-100">
+                                    <td class="px-4 py-3 whitespace-nowrap">{{ log.created_at.strftime('%d/%m/%Y %H:%M:%S') if log.created_at else '' }}</td>
+                                    <td class="px-4 py-3 font-semibold text-gray-800">{{ log.username or '-' }}</td>
+                                    <td class="px-4 py-3">
+                                        <span class="px-2 py-1 rounded-full text-xs font-bold {{ 'bg-red-100 text-red-700' if log.role == 'admin' else ('bg-blue-100 text-blue-700' if log.role == 'ctv' else 'bg-purple-100 text-purple-700') }}">{{ log.role or '-' }}</span>
+                                    </td>
+                                    <td class="px-4 py-3">{{ log.action }}</td>
+                                    <td class="px-4 py-3 text-gray-600">{{ log.detail or '' }}</td>
+                                </tr>
+                                {% else %}
+                                <tr><td colspan="5" class="px-4 py-8 text-center text-gray-400">Chưa có dữ liệu hoạt động.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
             
             <div id="view-vault" class="hidden">
                 <div class="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-gray-100 pb-4">
@@ -821,7 +865,7 @@
 
     <script>
         function switchTab(id) {
-            ['view-todo', 'view-premium', 'view-standard', 'view-fetch', 'view-master', 'view-vault', 'view-users'].forEach(v => {
+            ['view-todo', 'view-premium', 'view-standard', 'view-fetch', 'view-master', 'view-vault', 'view-users', 'view-activity'].forEach(v => {
                 let el = document.getElementById(v);
                 if (el) el.classList.add('hidden');
             });
@@ -836,7 +880,8 @@
                 'btn-fetch': 'border-teal-500 text-teal-600 bg-white',
                 'btn-master': 'border-gray-500 text-gray-600 bg-white',
                 'btn-vault': 'border-teal-500 text-teal-600 bg-white',
-                'btn-users': 'border-rose-500 text-rose-600 bg-white'
+                'btn-users': 'border-rose-500 text-rose-600 bg-white',
+                'btn-activity': 'border-amber-500 text-amber-600 bg-white'
             };
 
             Object.keys(btns).forEach(b => {
@@ -1150,7 +1195,7 @@
 
             let tabToOpen = 'view-todo';
 
-            if (hashTab && ['view-todo', 'view-premium', 'view-standard', 'view-fetch', 'view-master', 'view-vault', 'view-users'].includes(hashTab)) {
+            if (hashTab && ['view-todo', 'view-premium', 'view-standard', 'view-fetch', 'view-master', 'view-vault', 'view-users', 'view-activity'].includes(hashTab)) {
                 tabToOpen = hashTab;
             } else if (savedTab) {
                 tabToOpen = savedTab;
