@@ -335,15 +335,35 @@ def format_vault_status(acc, include_secrets=False):
 def parse_cookie_blob(cookie_text):
     if not cookie_text:
         return []
+
+    # 1. thử parse JSON trước
     try:
         data = json.loads(cookie_text)
+        if isinstance(data, dict) and isinstance(data.get("cookies"), list):
+            return data["cookies"]
+        if isinstance(data, list):
+            return data
     except Exception:
-        return []
-    if isinstance(data, dict) and isinstance(data.get("cookies"), list):
-        return data["cookies"]
-    if isinstance(data, list):
-        return data
-    return []
+        pass
+
+    # 2. fallback: parse dạng raw string
+    cookies = []
+    parts = cookie_text.split(";")
+
+    for part in parts:
+        if "=" not in part:
+            continue
+
+        name, value = part.strip().split("=", 1)
+
+        cookies.append({
+            "name": name.strip(),
+            "value": value.strip(),
+            "domain": ".netflix.com",
+            "path": "/"
+        })
+
+    return cookies
 
 
 def convert_cookies_for_playwright(raw_cookies):
