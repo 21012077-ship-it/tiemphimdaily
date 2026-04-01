@@ -1091,17 +1091,20 @@ def login_tv_code():
         is_success, msg = login_netflix_tv(acc.cookies, tv_code)
 
         if is_success:
-            acc.status = 'Đã Live'
-            acc.last_checked_at = datetime.now()
-
-            if not acc.assigned_to_user_id:
-                acc.assigned_to_user_id = current_user.id
-                acc.assigned_to = current_user.full_name or current_user.username
-                acc.assigned_at = datetime.now()
+            now = datetime.now()
+            acc.status = 'Đã Cấp'
+            acc.last_checked_at = now
+            acc.assigned_to_user_id = current_user.id
+            acc.assigned_to = current_user.full_name or current_user.username
+            acc.assigned_at = now
+            acc.next_recheck_at = now + timedelta(days=10)
 
             db.session.commit()
             log_activity('Duyệt mã TV', f"Thành công với account {acc.email} và mã {tv_code}")
-            return jsonify({'success': True, 'message': f'Duyệt TV thành công trên Email: {acc.email}! {msg}'})
+            return jsonify({
+                'success': True,
+                'message': f'Duyệt TV thành công trên Email: {acc.email}! {msg}'
+            })
 
         elif "chết" in msg.lower() or "login" in msg.lower():
             acc.status = 'Dead'
