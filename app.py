@@ -535,25 +535,23 @@ def auto_recheck_assigned_accounts():
         ).all()
 
         if not due_accounts:
-            print("[AUTO CHECK] Không có account nào đến hạn check.")
+            print("[AUTO RESET] Không có account nào đến hạn gửi lại.")
             return
 
-        print(f"[AUTO CHECK] Bắt đầu check {len(due_accounts)} account đến hạn...")
+        print(f"[AUTO RESET] Bắt đầu reset {len(due_accounts)} account đến hạn...")
 
         for acc in due_accounts:
-            print(f"[AUTO CHECK] Checking: {acc.email}")
-            is_live, check_msg = check_netflix_cookie_live(acc.cookies)
-            acc.last_checked_at = now
-            if is_live:
-                acc.next_recheck_at = now + timedelta(days=10)
-                print(f"[AUTO CHECK] LIVE - {acc.email} - {check_msg}")
-            else:
-                acc.status = "Offline"
-                acc.next_recheck_at = None
-                print(f"[AUTO CHECK] OFFLINE - {acc.email} - {check_msg}")
-            db.session.commit()
+            print(f"[AUTO RESET] Reset: {acc.email}")
 
+            acc.status = "Offline"
+            acc.assigned_to = ""
+            acc.assigned_to_user_id = None
+            acc.assigned_at = None
+            acc.last_checked_at = None
+            acc.next_recheck_at = None
 
+        db.session.commit()
+        print("[AUTO RESET] Hoàn tất reset account đến hạn.")
 # --- AUTH ROUTES ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -741,12 +739,13 @@ def reset_vault(item_id):
     if not acc:
         return jsonify({'success': False, 'message': 'Không tìm thấy tài khoản.'}), 404
 
-    acc.status = "Offline"
+    acc.status = "Chưa Check"
     acc.last_checked_at = None
     acc.assigned_to = ""
+    acc.assigned_to_user_id = None
     acc.assigned_at = None
-    if hasattr(acc, 'next_recheck_at'):
-        acc.next_recheck_at = None
+    acc.next_recheck_at = None
+
     db.session.commit()
     return jsonify({'success': True, 'message': f'Đã reset tài khoản {acc.email} về trạng thái chưa check.'})
 
