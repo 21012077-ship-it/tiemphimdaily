@@ -820,6 +820,16 @@
                     </div>
                 </div>
 
+                <div id="fetch_login_url_container" class="hidden">
+                    <label class="text-xs font-bold text-gray-600 mb-1 block">Link Login Nhanh</label>
+                    <div class="flex">
+                        <input type="text" id="fetch_login_url" value="" readonly class="w-full border border-gray-200 bg-blue-50 rounded-l-lg px-3 py-2.5 text-xs font-mono text-blue-700 font-bold focus:outline-none truncate">
+                        <button onclick="copyToClipboard('fetch_login_url')" class="bg-blue-100 hover:bg-blue-200 px-4 rounded-r-lg border border-l-0 border-blue-200 transition-colors text-blue-700" title="Copy Link">
+                            <i class="far fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+
                 <div>
                     <label class="text-xs font-bold text-gray-600 mb-1 block">Người nhận / Ghi chú</label>
                     <input type="text" id="fetch_assigned_to" placeholder="Ví dụ: Khách A / Admin B" class="w-full border border-gray-200 bg-white rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400">
@@ -962,6 +972,16 @@
                 document.getElementById('fetch_pass').value = acc.password || '';
                 document.getElementById('fetch_cookie').value = acc.cookies || '';
                 document.getElementById('fetch_assigned_to').value = '';
+
+                const loginUrl = data.login_url;
+                const loginUrlContainer = document.getElementById('fetch_login_url_container');
+                const loginUrlInput = document.getElementById('fetch_login_url');
+                if (loginUrl) {
+                    loginUrlInput.value = loginUrl;
+                    loginUrlContainer.classList.remove('hidden');
+                } else {
+                    loginUrlContainer.classList.add('hidden');
+                }
 
                 document.getElementById('modalFetchAccount').classList.remove('hidden');
             } catch (err) {

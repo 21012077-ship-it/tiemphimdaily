@@ -6,3 +6,4 @@ openpyxl
 playwright
 apscheduler
 psycopg2-binary
+requests

@@ -10,6 +10,11 @@ from datetime import datetime, date, timedelta
 import openpyxl
 from playwright.sync_api import sync_playwright
 from apscheduler.schedulers.background import BackgroundScheduler
+import requests
+import urllib.parse
+from urllib3.exceptions import InsecureRequestWarning
+
+requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key")
@@ -1185,6 +1190,89 @@ def check_account(item_id):
     return jsonify({'success': True, 'message': f'{acc.status} - {check_msg}', 'account': format_vault_status(acc)})
 
 
+def get_netflix_login_url(cookie_text):
+    cookies_list = parse_cookie_blob(cookie_text)
+    netflix_id = None
+    for c in cookies_list:
+        if c.get("name") == "NetflixId":
+            netflix_id = c.get("value")
+            break
+            
+    if not netflix_id:
+        return None
+
+    API_URL = "https://ios.prod.ftl.netflix.com/iosui/user/15.48"
+    QUERY_PARAMS = {
+        "appVersion": "15.48.1",
+        "config": '{"gamesInTrailersEnabled":"false","isTrailersEvidenceEnabled":"false","cdsMyListSortEnabled":"true","kidsBillboardEnabled":"true","addHorizontalBoxArtToVideoSummariesEnabled":"false","skOverlayTestEnabled":"false","homeFeedTestTVMovieListsEnabled":"false","baselineOnIpadEnabled":"true","trailersVideoIdLoggingFixEnabled":"true","postPlayPreviewsEnabled":"false","bypassContextualAssetsEnabled":"false","roarEnabled":"false","useSeason1AltLabelEnabled":"false","disableCDSSearchPaginationSectionKinds":["searchVideoCarousel"],"cdsSearchHorizontalPaginationEnabled":"true","searchPreQueryGamesEnabled":"true","kidsMyListEnabled":"true","billboardEnabled":"true","useCDSGalleryEnabled":"true","contentWarningEnabled":"true","videosInPopularGamesEnabled":"true","avifFormatEnabled":"false","sharksEnabled":"true"}',
+        "device_type": "NFAPPL-02-",
+        "esn": "NFAPPL-02-IPHONE8%3D1-PXA-02026U9VV5O8AUKEAEO8PUJETCGDD4PQRI9DEB3MDLEMD0EACM4CS78LMD334MN3MQ3NMJ8SU9O9MVGS6BJCURM1PH1MUTGDPF4S4200",
+        "idiom": "phone",
+        "iosVersion": "15.8.5",
+        "isTablet": "false",
+        "languages": "en-US",
+        "locale": "en-US",
+        "maxDeviceWidth": "375",
+        "model": "saget",
+        "modelType": "IPHONE8-1",
+        "odpAware": "true",
+        "path": '["account","token","default"]',
+        "pathFormat": "graph",
+        "pixelDensity": "2.0",
+        "progressive": "false",
+        "responseFormat": "json",
+    }
+    BASE_HEADERS = {
+        "User-Agent": "Argo/15.48.1 (iPhone; iOS 15.8.5; Scale/2.00)",
+        "x-netflix.request.attempt": "1",
+        "x-netflix.request.client.user.guid": "A4CS633D7VCBPE2GPK2HL4EKOE",
+        "x-netflix.context.profile-guid": "A4CS633D7VCBPE2GPK2HL4EKOE",
+        "x-netflix.request.routing": '{"path":"/nq/mobile/nqios/~15.48.0/user","control_tag":"iosui_argo"}',
+        "x-netflix.context.app-version": "15.48.1",
+        "x-netflix.argo.translated": "true",
+        "x-netflix.context.form-factor": "phone",
+        "x-netflix.context.sdk-version": "2012.4",
+        "x-netflix.client.appversion": "15.48.1",
+        "x-netflix.context.max-device-width": "375",
+        "x-netflix.context.ab-tests": "",
+        "x-netflix.tracing.cl.useractionid": "4DC655F2-9C3C-4343-8229-CA1B003C3053",
+        "x-netflix.client.type": "argo",
+        "x-netflix.client.ftl.esn": "NFAPPL-02-IPHONE8=1-PXA-02026U9VV5O8AUKEAEO8PUJETCGDD4PQRI9DEB3MDLEMD0EACM4CS78LMD334MN3MQ3NMJ8SU9O9MVGS6BJCURM1PH1MUTGDPF4S4200",
+        "x-netflix.context.locales": "en-US",
+        "x-netflix.context.top-level-uuid": "90AFE39F-ADF1-4D8A-B33E-528730990FE3",
+        "x-netflix.client.iosversion": "15.8.5",
+        "accept-language": "en-US;q=1",
+        "x-netflix.argo.abtests": "",
+        "x-netflix.context.os-version": "15.8.5",
+        "x-netflix.request.client.context": '{"appState":"foreground"}',
+        "x-netflix.context.ui-flavor": "argo",
+        "x-netflix.argo.nfnsm": "9",
+        "x-netflix.context.pixel-density": "2.0",
+        "x-netflix.request.toplevel.uuid": "90AFE39F-ADF1-4D8A-B33E-528730990FE3",
+        "x-netflix.request.client.timezoneid": "Asia/Dhaka",
+        "Cookie": f"NetflixId={netflix_id}"
+    }
+
+    try:
+        response = requests.get(
+            API_URL,
+            params=QUERY_PARAMS,
+            headers=BASE_HEADERS,
+            timeout=10,
+            verify=False,
+        )
+        data = response.json()
+        token_data = (
+            (((data.get("value") or {}).get("account") or {}).get("token") or {}).get("default")
+            or {}
+        )
+        token = token_data.get("token")
+        if token:
+            return "https://netflix.com/?nftoken=" + token
+    except Exception as e:
+        print("Lỗi tạo login link:", e)
+    return None
+
 @app.route('/fetch_account', methods=['POST'])
 @login_required
 @not_tv_required
@@ -1219,10 +1307,13 @@ def fetch_account():
                 db.session.commit()
                 log_activity('Lấy account kho', f"Lấy {acc.email} - Plan: {acc.plan}")
 
+                login_url = get_netflix_login_url(acc.cookies)
+
                 return jsonify({
                     'success': True,
                     'message': f'Lấy tài khoản thành công. {check_msg}',
-                    'account': format_vault_status(acc, include_secrets=True)
+                    'account': format_vault_status(acc, include_secrets=True),
+                    'login_url': login_url or ''
                 })
             
             # Nếu phát hiện hết hạn hoặc chết thì đánh dấu vào DB rồi lặp qua acc tiếp theo
