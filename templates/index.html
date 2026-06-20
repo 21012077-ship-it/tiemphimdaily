@@ -567,6 +567,10 @@
                             <option value="N/A">N/A</option>
                         </select>
 
+                        <button type="button" id="btn-batch-check" onclick="batchCheckAccounts()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-lg text-sm font-bold shadow-md transition-all flex items-center gap-2">
+                            <i class="fas fa-tasks"></i> Check Chưa Check
+                        </button>
+
                         <button type="button" id="btn-fetch-acc" onclick="openFetchModal()" class="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2.5 rounded-lg text-sm font-bold shadow-md transition-all flex items-center gap-2">
                             <i class="fas fa-magic"></i> Lấy 1 Tài Khoản
                         </button>
@@ -639,7 +643,7 @@
                             </tr>
                             {% else %}
                                 {% for acc in vault_accounts %}
-                                <tr class="hover:bg-gray-50 bg-white">
+                                <tr class="hover:bg-gray-50 bg-white vault-row" data-acc-id="{{ acc.id }}" data-acc-status="{{ acc.status }}">
                                     <td class="p-4 pl-6">
                                         <div class="font-bold text-gray-900 text-sm">{{ acc.email }}</div>
                                         <div class="text-xs text-red-500 font-mono mt-1">{{ acc.password }}</div>
@@ -1088,6 +1092,53 @@
                 console.error(err);
                 showToastMessage('Lỗi khi check account');
             }
+        }
+
+        async function batchCheckAccounts() {
+            const rows = document.querySelectorAll('tr.vault-row');
+            const idsToCheck = [];
+            rows.forEach(row => {
+                const status = row.getAttribute('data-acc-status');
+                if (status === 'Chưa Check' || status === 'Offline') {
+                    idsToCheck.push(row.getAttribute('data-acc-id'));
+                }
+            });
+
+            if (idsToCheck.length === 0) {
+                showToastMessage('Không có tài khoản nào cần check (chưa check/offline).');
+                return;
+            }
+
+            if (!confirm(`Phát hiện ${idsToCheck.length} tài khoản cần check. Bạn có muốn bắt đầu check hàng loạt không? Quá trình này sẽ diễn ra tuần tự và mất một ít thời gian.`)) {
+                return;
+            }
+
+            const btn = document.getElementById('btn-batch-check');
+            const originalHTML = btn.innerHTML;
+
+            for (let i = 0; i < idsToCheck.length; i++) {
+                const id = idsToCheck[i];
+                btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Đang check ${i + 1}/${idsToCheck.length}...`;
+                btn.disabled = true;
+                btn.classList.add('opacity-75', 'cursor-not-allowed');
+
+                try {
+                    const row = document.querySelector(`tr.vault-row[data-acc-id="${id}"]`);
+                    if(row) row.style.opacity = '0.5';
+
+                    await fetch(`/check_account/${id}`, { method: 'POST' });
+                    
+                    if(row) row.style.opacity = '1';
+                } catch (err) {
+                    console.error('Error checking account', id, err);
+                }
+            }
+
+            btn.innerHTML = originalHTML;
+            btn.disabled = false;
+            btn.classList.remove('opacity-75', 'cursor-not-allowed');
+            showToastMessage('Đã hoàn tất check hàng loạt!');
+            setTimeout(() => window.location.reload(), 1000);
         }
 
         function copyToClipboard(inputId) {
