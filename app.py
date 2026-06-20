@@ -812,6 +812,9 @@ def index():
     if current_user.role == 'tv':
         return redirect(url_for('tv_dashboard'))
 
+    # Tự động reset các account đến hạn khi load trang
+    auto_recheck_assigned_accounts()
+
     standards_active = get_visible_standard_query().order_by(StandardSub.expiry_date.asc()).all()
     premiums = get_visible_premiums()
 
@@ -876,6 +879,19 @@ def index():
             })
 
     vault_accounts = AccountVault.query.order_by(AccountVault.id.desc()).all() if current_user.role == 'admin' else []
+    
+    vault_stats = {
+        'online': 0, 'offline': 0, 'premium': 0, 'standard': 0, 'dead': 0
+    }
+    if current_user.role == 'admin':
+        for acc in vault_accounts:
+            if 'Premium' in acc.plan: vault_stats['premium'] += 1
+            elif 'Standard' in acc.plan: vault_stats['standard'] += 1
+            
+            if acc.status in ['Đã Live', 'Đã Cấp']: vault_stats['online'] += 1
+            elif acc.status in ['Offline', 'Chưa Check']: vault_stats['offline'] += 1
+            else: vault_stats['dead'] += 1
+
     my_fetched_accounts = AccountVault.query.filter_by(assigned_to_user_id=current_user.id).order_by(AccountVault.assigned_at.desc()).all() if current_user.role != 'admin' else []
     users = User.query.order_by(User.created_at.desc()).all() if current_user.role == 'admin' else []
     activity_logs = ActivityLog.query.order_by(ActivityLog.created_at.desc()).limit(200).all() if current_user.role == 'admin' else []
@@ -887,6 +903,7 @@ def index():
         todos=todos,
         master_list=master_list,
         vault_accounts=vault_accounts,
+        vault_stats=vault_stats,
         my_fetched_accounts=my_fetched_accounts,
         users=users,
         activity_logs=activity_logs,
