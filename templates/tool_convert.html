@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Convert Cookies to Netflix Login Link</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg p-8 border border-gray-100">
+        <div class="text-center mb-8">
+            <div class="w-16 h-16 bg-teal-100 text-teal-600 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl shadow-sm">
+                <i class="fas fa-cookie-bite"></i>
+            </div>
+            <h1 class="text-2xl font-bold text-gray-800">Convert Cookies</h1>
+            <p class="text-sm text-gray-500 mt-2">Dán Cookie Netflix vào đây để lấy link đăng nhập trực tiếp (NFTOKEN).</p>
+        </div>
+
+        <form method="POST" class="space-y-5">
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1">Netflix Cookies</label>
+                <textarea name="cookie" rows="4" placeholder="Ví dụ: NetflixId=ct%3DBQAOAAEBE..." required
+                          class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-teal-500 outline-none transition-all shadow-sm bg-gray-50 focus:bg-white"></textarea>
+            </div>
+            <button type="submit" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">
+                <i class="fas fa-sync-alt"></i> Chuyển đổi Link
+            </button>
+        </form>
+
+        {% if login_url %}
+        <div class="mt-8 p-5 bg-green-50 border border-green-200 rounded-xl relative">
+            <h3 class="text-sm font-bold text-green-800 mb-2 flex items-center gap-2"><i class="fas fa-check-circle"></i> Kết quả (Link Login Nhanh)</h3>
+            <div class="flex">
+                <input type="text" id="resultLink" value="{{ login_url }}" readonly class="w-full bg-white border border-green-200 rounded-l-lg px-3 py-2.5 text-xs font-mono text-green-700 focus:outline-none truncate">
+                <button onclick="copyLink()" class="bg-green-600 hover:bg-green-700 px-4 rounded-r-lg text-white transition-colors flex items-center justify-center" title="Copy Link">
+                    <i class="far fa-copy"></i>
+                </button>
+            </div>
+        </div>
+        <script>
+            function copyLink() {
+                var copyText = document.getElementById("resultLink");
+                copyText.select();
+                copyText.setSelectionRange(0, 99999);
+                document.execCommand("copy");
+                alert("Đã copy link!");
+            }
+        </script>
+        {% elif request.method == 'POST' %}
+        <div class="mt-8 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 flex items-start gap-2">
+            <i class="fas fa-exclamation-triangle mt-0.5"></i> 
+            <span>Cookie không hợp lệ hoặc không thể lấy link. Vui lòng kiểm tra lại.</span>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>

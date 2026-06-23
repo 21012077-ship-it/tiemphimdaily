@@ -1424,6 +1424,54 @@ def assign_account(item_id):
     return jsonify({'success': True, 'message': f'Đã cấp tài khoản {acc.email}', 'account': format_vault_status(acc, include_secrets=True)})
 
 
+def get_household_link(email):
+    from playwright.sync_api import sync_playwright
+    import time
+    import re
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto("https://zx4nxt_bot_1.opomail.store/login?key=e9ebba329687", wait_until="networkidle")
+            time.sleep(2)
+            page.locator('input[type="email"]').fill(email)
+            page.locator('text="Household"').click()
+            time.sleep(1)
+            page.locator('text="Retrieve Access Info"').click()
+            
+            try:
+                page.wait_for_selector('text="RESULT FOUND"', timeout=15000)
+                time.sleep(1)
+                html = page.content()
+                match = re.search(r'https://www\.netflix\.com/account/update-primary-location\?nftoken=[^\s"<]+', html)
+                if match:
+                    return match.group(0)
+                else:
+                    return "Không tìm thấy link trong kết quả trả về. Vui lòng thử lại sau."
+            except Exception as e:
+                return f"Lỗi timeout chờ kết quả từ Bot: {str(e)}"
+            finally:
+                browser.close()
+    except Exception as e:
+        return f"Lỗi hệ thống Playwright: {str(e)}"
+
+@app.route('/tools/convert-cookie', methods=['GET', 'POST'])
+def convert_cookie_tool():
+    login_url = None
+    if request.method == 'POST':
+        cookie = request.form.get('cookie', '')
+        login_url = get_netflix_login_url(cookie)
+    return render_template('tool_convert.html', login_url=login_url)
+
+@app.route('/tools/household', methods=['GET', 'POST'])
+def household_tool():
+    result = None
+    if request.method == 'POST':
+        email = request.form.get('email', '')
+        if email:
+            result = get_household_link(email)
+    return render_template('tool_household.html', result=result)
+
 scheduler = BackgroundScheduler()
 scheduler.add_job(
     func=auto_recheck_assigned_accounts,

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cập Nhật Hộ Gia Đình Netflix</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f8fafc; }
+        .glass-panel { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+    <div class="glass-panel rounded-2xl shadow-2xl w-full max-w-lg p-8">
+        <div class="text-center mb-8">
+            <div class="w-16 h-16 bg-blue-500/20 text-blue-400 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl shadow-sm border border-blue-500/30">
+                <i class="fas fa-home"></i>
+            </div>
+            <h1 class="text-2xl font-bold text-white">Cập Nhật Hộ Gia Đình</h1>
+            <p class="text-sm text-slate-400 mt-2">Nhập email tài khoản Netflix của bạn để lấy mã xác minh hoặc link cập nhật.</p>
+        </div>
+
+        <form method="POST" class="space-y-6" id="householdForm">
+            <div>
+                <label class="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">Netflix Account Email</label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
+                        <i class="far fa-envelope"></i>
+                    </div>
+                    <input type="email" name="email" placeholder="your@email.com" required
+                           class="w-full bg-slate-900/50 border border-slate-700 rounded-xl pl-11 pr-4 py-3.5 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder-slate-600">
+                </div>
+            </div>
+            <button type="submit" id="submitBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 border border-blue-500">
+                <i class="fas fa-search"></i> Lấy Link Xác Minh
+            </button>
+        </form>
+
+        <div id="loadingBox" class="hidden mt-8 p-6 bg-slate-800/50 border border-slate-700 rounded-xl text-center">
+            <i class="fas fa-spinner fa-spin text-3xl text-blue-500 mb-3"></i>
+            <p class="text-sm text-slate-300 font-medium">Đang kết nối hệ thống, vui lòng chờ trong giây lát...</p>
+        </div>
+
+        {% if result %}
+        <div class="mt-8 p-5 bg-slate-800 border border-slate-700 rounded-xl relative">
+            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Kết quả:</h3>
+            <div class="p-3 bg-slate-900 rounded-lg border border-slate-700 text-sm font-mono text-green-400 break-all">
+                {{ result }}
+            </div>
+            <div class="mt-4 flex gap-3">
+                <button onclick="copyResult()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-semibold py-2 rounded-lg transition-colors text-sm flex items-center justify-center gap-2">
+                    <i class="far fa-copy"></i> Copy Link
+                </button>
+            </div>
+        </div>
+        <script>
+            function copyResult() {
+                var text = {{ result|tojson|safe }};
+                navigator.clipboard.writeText(text).then(function() {
+                    alert("Đã copy thành công!");
+                }, function(err) {
+                    alert("Lỗi khi copy!");
+                });
+            }
+        </script>
+        {% endif %}
+    </div>
+
+    <script>
+        document.getElementById('householdForm').addEventListener('submit', function() {
+            document.getElementById('submitBtn').disabled = true;
+            document.getElementById('submitBtn').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang xử lý...';
+            document.getElementById('loadingBox').classList.remove('hidden');
+            
+            // Hide result if submitting again
+            var resultBox = document.querySelector('.mt-8.p-5.bg-slate-800');
+            if (resultBox) {
+                resultBox.classList.add('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
