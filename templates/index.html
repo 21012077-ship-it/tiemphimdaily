@@ -71,6 +71,9 @@
                 <div id="btn-vault" onclick="switchTab('view-vault')" class="py-4 px-4 md:px-6 cursor-pointer tab-inactive border-transparent hover:text-gray-800 flex items-center gap-2 rounded-t-lg transition-all">
                     <i class="fas fa-box-open text-teal-500 text-lg"></i> <span>Kho Tài Khoản</span>
                 </div>
+                <div id="btn-tvlogin" onclick="switchTab('view-tvlogin')" class="py-4 px-4 md:px-6 cursor-pointer tab-inactive border-transparent hover:text-gray-800 flex items-center gap-2 rounded-t-lg transition-all">
+                    <i class="fas fa-tv text-red-500 text-lg"></i> <span>Duyệt Mã TV</span>
+                </div>
                 <div id="btn-users" onclick="switchTab('view-users')" class="py-4 px-4 md:px-6 cursor-pointer tab-inactive border-transparent hover:text-gray-800 flex items-center gap-2 rounded-t-lg transition-all">
                     <i class="fas fa-users text-rose-500 text-lg"></i> <span>Tài Khoản Hệ Thống</span>
                 </div>
@@ -723,6 +726,39 @@
                 </div>
             </div>
             {% endif %}
+
+            <div id="view-tvlogin" class="hidden">
+                <div class="mb-6 border-b border-gray-100 pb-4">
+                    <h2 class="text-xl font-bold text-gray-800">Duyệt Mã TV (Admin)</h2>
+                    <p class="text-sm text-gray-500 mt-1">Duyệt mã đăng nhập cho khách hàng tự động thông qua các tài khoản trong Kho.</p>
+                </div>
+                
+                <div class="max-w-md mx-auto bg-white rounded-3xl shadow-xl p-8 border border-gray-100 mt-8">
+                    <div class="text-center mb-8">
+                        <div class="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">
+                            <i class="fas fa-tv"></i>
+                        </div>
+                        <h1 class="text-xl font-bold text-gray-900">Nhập Mã TV</h1>
+                    </div>
+
+                    <div>
+                        <input
+                            type="text"
+                            id="admin_tv_code_input"
+                            maxlength="10"
+                            placeholder="VD: 1234 5678"
+                            class="w-full border border-gray-300 bg-gray-50 rounded-xl px-4 py-4 text-xl font-bold text-center tracking-widest uppercase focus:outline-none focus:ring-2 focus:ring-red-400"
+                        >
+                    </div>
+
+                    <div class="mt-6">
+                        <button id="btn_admin_submit_tv" onclick="adminSubmitTVCode()" class="w-full bg-red-600 hover:bg-red-700 text-white py-3.5 rounded-xl font-bold shadow-md transition-all flex justify-center items-center">
+                            <i class="fas fa-play-circle mr-2"></i> Duyệt Mã Ngay
+                        </button>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
 
@@ -920,7 +956,8 @@
                 'btn-master': 'border-gray-500 text-gray-600 bg-white',
                 'btn-vault': 'border-teal-500 text-teal-600 bg-white',
                 'btn-users': 'border-rose-500 text-rose-600 bg-white',
-                'btn-activity': 'border-amber-500 text-amber-600 bg-white'
+                'btn-activity': 'border-amber-500 text-amber-600 bg-white',
+                'btn-tvlogin': 'border-red-500 text-red-600 bg-white'
             };
 
             Object.keys(btns).forEach(b => {
@@ -1140,6 +1177,50 @@
             showToastMessage('Đã hoàn tất check hàng loạt!');
             setTimeout(() => window.location.reload(), 1000);
         }
+
+        async function adminSubmitTVCode() {
+            const codeInput = document.getElementById('admin_tv_code_input');
+            const btn = document.getElementById('btn_admin_submit_tv');
+            if(!codeInput || !btn) return;
+            
+            const tvCode = codeInput.value.replace(/\s/g, '').trim();
+
+            if (tvCode.length !== 8) {
+                showToastMessage('Mã TV phải chứa đúng 8 ký tự!');
+                codeInput.focus();
+                return;
+            }
+
+            const originalBtnHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Đang duyệt...';
+            btn.disabled = true;
+            btn.classList.add('opacity-75', 'cursor-not-allowed');
+
+            try {
+                const res = await fetch('/login_tv_code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tv_code: tvCode })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    showToastMessage(data.message);
+                    codeInput.value = '';
+                } else {
+                    showToastMessage(data.message || 'Có lỗi xảy ra');
+                }
+            } catch (err) {
+                console.error(err);
+                showToastMessage('Có lỗi máy chủ xảy ra!');
+            } finally {
+                btn.innerHTML = originalBtnHTML;
+                btn.disabled = false;
+                btn.classList.remove('opacity-75', 'cursor-not-allowed');
+            }
+        }
+
 
         function copyToClipboard(inputId) {
             const copyText = document.getElementById(inputId);

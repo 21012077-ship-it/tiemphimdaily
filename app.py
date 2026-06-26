@@ -1434,7 +1434,7 @@ def get_household_link(email):
             page = browser.new_page()
             page.goto("https://zx4nxt_bot_1.opomail.store/login?key=e9ebba329687", wait_until="networkidle")
             time.sleep(2)
-            page.locator('input[type="email"]').fill(email)
+            page.locator('#email-input').fill(email)
             page.locator('text="Household"').click()
             time.sleep(1)
             page.locator('text="Retrieve Access Info"').click()
