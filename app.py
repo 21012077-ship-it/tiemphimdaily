@@ -1434,24 +1434,35 @@ def get_household_link(email):
             page = browser.new_page()
             page.goto("https://zx4nxt_bot_1.opomail.store/login?key=e9ebba329687", wait_until="networkidle")
             time.sleep(2)
+
+            # Fill email vào đúng ô Netflix Account Email
             page.locator('#email-input').fill(email)
+            time.sleep(0.5)
+
+            # Chọn loại Household
             page.locator('text="Household"').click()
             time.sleep(1)
+
+            # Bấm nút Retrieve Access Info
             page.locator('text="Retrieve Access Info"').click()
-            
-            try:
-                page.wait_for_selector('text="RESULT FOUND"', timeout=15000)
-                time.sleep(1)
+
+            # Chờ link Netflix xuất hiện trực tiếp trong HTML (thay vì chờ text "RESULT FOUND")
+            nftoken_pattern = re.compile(
+                r'https://www\.netflix\.com/account/update-primary-location\?nftoken=[^\s"<]+'
+            )
+
+            deadline = time.time() + 30  # tối đa 30 giây
+            while time.time() < deadline:
+                time.sleep(1.5)
                 html = page.content()
-                match = re.search(r'https://www\.netflix\.com/account/update-primary-location\?nftoken=[^\s"<]+', html)
+                match = nftoken_pattern.search(html)
                 if match:
+                    browser.close()
                     return match.group(0)
-                else:
-                    return "Không tìm thấy link trong kết quả trả về. Vui lòng thử lại sau."
-            except Exception as e:
-                return f"Lỗi timeout chờ kết quả từ Bot: {str(e)}"
-            finally:
-                browser.close()
+
+            # Hết thời gian vẫn không có link
+            browser.close()
+            return "Hết thời gian chờ (30s). Bot chưa trả về link. Vui lòng thử lại sau."
     except Exception as e:
         return f"Lỗi hệ thống Playwright: {str(e)}"
 
