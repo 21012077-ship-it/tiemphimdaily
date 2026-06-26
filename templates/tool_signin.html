@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In Code – Netflix Tool</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background: linear-gradient(135deg, #0a0a0a 0%, #111827 50%, #0a0a0a 100%); }
+        .glass { background: rgba(17,24,39,0.85); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.08); }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .spin { animation: spin 1s linear infinite; display: inline-block; }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+    <div class="glass rounded-2xl shadow-2xl w-full max-w-md p-8">
+
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <a href="/tools" class="inline-flex items-center text-gray-500 hover:text-gray-300 text-xs mb-4 transition-colors">
+                <i class="fas fa-arrow-left mr-1"></i> Quay lại
+            </a>
+            <div class="w-14 h-14 bg-yellow-500/15 text-yellow-400 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl border border-yellow-500/20">
+                <i class="fas fa-sign-in-alt"></i>
+            </div>
+            <h1 class="text-xl font-bold text-white">Sign In Code</h1>
+            <p class="text-xs text-gray-400 mt-1">Nhập key truy cập và email Netflix để lấy mã đăng nhập.</p>
+        </div>
+
+        <!-- Form -->
+        <div class="space-y-4">
+            <!-- Key truy cập -->
+            <div>
+                <label class="block text-xs font-bold text-gray-400 mb-1.5 uppercase tracking-wider">
+                    <i class="fas fa-key mr-1 text-yellow-500"></i> Key Truy Cập
+                </label>
+                <input type="text" id="keyInput" maxlength="8" placeholder="Nhập key 8 số do Admin cấp..."
+                       class="w-full bg-black/40 border border-gray-700 rounded-xl px-4 py-3 text-sm text-white focus:ring-2 focus:ring-yellow-500 outline-none transition-all placeholder-gray-600 font-mono tracking-widest text-center text-lg font-bold">
+            </div>
+
+            <!-- Email -->
+            <div>
+                <label class="block text-xs font-bold text-gray-400 mb-1.5 uppercase tracking-wider">
+                    <i class="far fa-envelope mr-1 text-yellow-500"></i> Netflix Account Email
+                </label>
+                <input type="email" id="emailInput" placeholder="your@email.com"
+                       class="w-full bg-black/40 border border-gray-700 rounded-xl px-4 py-3 text-sm text-white focus:ring-2 focus:ring-yellow-500 outline-none transition-all placeholder-gray-600">
+            </div>
+
+            <button id="submitBtn" onclick="startSignInTask()"
+                    class="w-full bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-3.5 px-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 mt-2">
+                <i class="fas fa-search"></i> Lấy Mã Đăng Nhập
+            </button>
+        </div>
+
+        <!-- Loading -->
+        <div id="loadingBox" class="hidden mt-6 p-5 bg-black/30 border border-gray-700 rounded-xl text-center">
+            <i class="fas fa-spinner spin text-2xl text-yellow-400 mb-2"></i>
+            <p class="text-xs text-gray-300 font-medium mt-2">Đang xử lý, vui lòng đợi (~15-30 giây)...</p>
+        </div>
+
+        <!-- Result -->
+        <div id="resultBox" class="hidden mt-6 p-5 bg-black/30 border border-gray-700 rounded-xl">
+            <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Kết quả:</h3>
+            <div id="resultText" class="p-3 bg-black/50 rounded-lg border border-gray-700 text-sm font-mono text-yellow-300 break-all leading-relaxed"></div>
+            <button onclick="copyResult()" class="mt-3 w-full bg-gray-800 hover:bg-gray-700 text-white font-semibold py-2 rounded-lg transition-colors text-sm flex items-center justify-center gap-2">
+                <i class="far fa-copy"></i> Copy Kết Quả
+            </button>
+        </div>
+    </div>
+
+    <script>
+        let pollInterval = null;
+
+        async function startSignInTask() {
+            const key = document.getElementById('keyInput').value.trim();
+            const email = document.getElementById('emailInput').value.trim();
+
+            if (!key || !email) {
+                alert('Vui lòng nhập đầy đủ Key và Email!');
+                return;
+            }
+
+            const btn = document.getElementById('submitBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner spin"></i> Đang xác minh key...';
+            document.getElementById('loadingBox').classList.remove('hidden');
+            document.getElementById('resultBox').classList.add('hidden');
+
+            try {
+                const res = await fetch('/tools/signin/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key, email })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    btn.innerHTML = '<i class="fas fa-spinner spin"></i> Đang xử lý...';
+                    pollForResult(data.task_id);
+                } else {
+                    showResult(data.message, 'error');
+                }
+            } catch (err) {
+                showResult('Lỗi kết nối máy chủ: ' + err.message, 'error');
+            }
+        }
+
+        function pollForResult(taskId) {
+            let attempts = 0;
+            pollInterval = setInterval(async () => {
+                attempts++;
+                try {
+                    const res = await fetch(`/tools/signin/status/${taskId}`);
+                    const data = await res.json();
+                    if (data.status === 'done') {
+                        clearInterval(pollInterval);
+                        showResult(data.result, data.result && data.result.includes('⚠️') ? 'warning' : 'success');
+                    } else if (data.status === 'not_found' || attempts >= 50) {
+                        clearInterval(pollInterval);
+                        showResult('Hết thời gian chờ. Vui lòng thử lại.', 'error');
+                    }
+                } catch (err) {
+                    clearInterval(pollInterval);
+                    showResult('Lỗi: ' + err.message, 'error');
+                }
+            }, 2000);
+        }
+
+        function showResult(text, type = 'success') {
+            document.getElementById('loadingBox').classList.add('hidden');
+            document.getElementById('resultBox').classList.remove('hidden');
+
+            const el = document.getElementById('resultText');
+            const colors = {
+                'success': 'text-yellow-300 border-gray-700',
+                'warning': 'text-orange-400 border-orange-800',
+                'error': 'text-red-400 border-red-800'
+            };
+            el.className = `p-3 bg-black/50 rounded-lg border text-sm font-mono break-all leading-relaxed ${colors[type] || colors.success}`;
+            el.textContent = text || 'Không có kết quả.';
+
+            const btn = document.getElementById('submitBtn');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-search"></i> Lấy Mã Đăng Nhập';
+        }
+
+        function copyResult() {
+            const text = document.getElementById('resultText').textContent;
+            navigator.clipboard.writeText(text).then(() => alert('Đã copy!'));
+        }
+
+        document.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') startSignInTask();
+        });
+    </script>
+</body>
+</html>

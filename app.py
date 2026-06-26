@@ -139,6 +139,25 @@ class ActivityLog(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
 
+class ToolKey(db.Model):
+    """Key truy cập công cụ Sign In Code cho khách hàng."""
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(8), unique=True, nullable=False)
+    label = db.Column(db.String(100), default='')   # Ghi chú (tên khách, mục đích...)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    is_active = db.Column(db.Boolean, default=True)
+
+    @property
+    def is_valid(self):
+        return self.is_active and self.expires_at > datetime.utcnow()
+
+    @property
+    def days_left(self):
+        delta = self.expires_at - datetime.utcnow()
+        return max(0, delta.days)
+
+
 @login_manager.user_loader
 def load_user(user_id):
     return db.session.get(User, int(user_id))
@@ -1486,6 +1505,10 @@ def get_household_link(email):
     except Exception as e:
         return f"Lỗi hệ thống Playwright: {str(e)}"
 
+@app.route('/tools')
+def tools_index():
+    return render_template('tool_index.html')
+
 @app.route('/tools/convert-cookie', methods=['GET', 'POST'])
 def convert_cookie_tool():
     login_url = None
@@ -1513,7 +1536,7 @@ def household_start():
     data = request.get_json(silent=True) or {}
     email = (data.get('email') or '').strip()
     if not email:
-        return jsonify({'success': False, 'message': 'Thiếu email'})
+        return jsonify({'success': False, 'message': 'Thi\u1ebfu email'})
     task_id = str(uuid.uuid4())
     _household_tasks[task_id] = {'status': 'pending', 'result': None}
     t = threading.Thread(target=_run_household_task, args=(task_id, email), daemon=True)
@@ -1526,6 +1549,155 @@ def household_status(task_id):
     if not task:
         return jsonify({'status': 'not_found'})
     return jsonify({'status': task['status'], 'result': task.get('result')})
+
+
+# ============================================================
+# SIGN IN CODE TOOL
+# ============================================================
+
+def get_signin_link(email):
+    """Ch\u1ea1y Playwright: ch\u1ecdn Sign In tr\u00ean bot v\u00e0 l\u1ea5y link/m\u00e3 k\u1ebft qu\u1ea3."""
+    import threading as _threading
+    import re as _re
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto("https://zx4nxt_bot_1.opomail.store/login?key=e9ebba329687", wait_until="networkidle")
+            import time as _time
+            _time.sleep(2)
+            page.locator('#email-input').fill(email)
+            _time.sleep(0.5)
+            page.locator('text="Sign In"').click()
+            _time.sleep(1)
+            page.locator('text="Retrieve Access Info"').click()
+
+            nftoken_pattern = _re.compile(
+                r'https://www\.netflix\.com[^\s"<]*nftoken=[^\s"<]+'
+            )
+            verification_block_pattern = _re.compile(
+                r'(?:TRAVELING VERIFICATION CODE|SIGN.?IN)[\s\S]{0,300}?>\s*([A-Z]+|\d{4})\s*<',
+                _re.IGNORECASE
+            )
+
+            deadline = _time.time() + 30
+            while _time.time() < deadline:
+                _time.sleep(1.5)
+                html = page.content()
+                link_match = nftoken_pattern.search(html)
+                if link_match:
+                    browser.close()
+                    return link_match.group(0)
+                block_match = verification_block_pattern.search(html)
+                if block_match:
+                    val = block_match.group(1).strip()
+                    browser.close()
+                    if val.upper() == 'EXPIRED':
+                        return "\u26a0\ufe0f M\u00e3 \u0111\u0103ng nh\u1eadp \u0111\u00e3 H\u1ecc H\u1ea0N (EXPIRED). Vui l\u00f2ng th\u1eed l\u1ea1i sau."
+                    elif val.isdigit() and len(val) == 4:
+                        return f"M\u00e3 \u0111\u0103ng nh\u1eadp: {val}"
+                    else:
+                        return f"K\u1ebft qu\u1ea3: {val}"
+
+            browser.close()
+            return "H\u1ebft th\u1eddi gian ch\u1edd. Bot ch\u01b0a tr\u1ea3 v\u1ec1 k\u1ebft qu\u1ea3. Vui l\u00f2ng th\u1eed l\u1ea1i sau."
+    except Exception as e:
+        return f"L\u1ed7i h\u1ec7 th\u1ed1ng: {str(e)}"
+
+
+_signin_tasks = {}
+
+def _run_signin_task(task_id, email):
+    result = get_signin_link(email)
+    _signin_tasks[task_id] = {'status': 'done', 'result': result}
+
+
+@app.route('/tools/signin', methods=['GET'])
+def signin_tool():
+    return render_template('tool_signin.html')
+
+@app.route('/tools/signin/start', methods=['POST'])
+def signin_start():
+    data = request.get_json(silent=True) or {}
+    email = (data.get('email') or '').strip()
+    key_input = (data.get('key') or '').strip()
+
+    if not email or not key_input:
+        return jsonify({'success': False, 'message': 'Vui l\u00f2ng nh\u1eadp \u0111\u1ee7 Email v\u00e0 Key truy c\u1eadp.'})
+
+    # X\u00e1c th\u1ef1c key
+    tool_key = ToolKey.query.filter_by(key=key_input).first()
+    if not tool_key or not tool_key.is_valid:
+        return jsonify({'success': False, 'message': 'Key kh\u00f4ng t\u1ed3n t\u1ea1i ho\u1eb7c \u0111\u00e3 h\u1ebft h\u1ea1n, vui l\u00f2ng nh\u1eafn tin cho admin.'})
+
+    task_id = str(uuid.uuid4())
+    _signin_tasks[task_id] = {'status': 'pending', 'result': None}
+    t = threading.Thread(target=_run_signin_task, args=(task_id, email), daemon=True)
+    t.start()
+    return jsonify({'success': True, 'task_id': task_id})
+
+@app.route('/tools/signin/status/<task_id>', methods=['GET'])
+def signin_status(task_id):
+    task = _signin_tasks.get(task_id)
+    if not task:
+        return jsonify({'status': 'not_found'})
+    return jsonify({'status': task['status'], 'result': task.get('result')})
+
+
+# --- Qu\u1ea3n l\u00fd Key (Admin only) ---
+import random as _random
+import string as _string
+
+@app.route('/admin/keys', methods=['GET'])
+@login_required
+@admin_required
+def admin_keys():
+    keys = ToolKey.query.order_by(ToolKey.created_at.desc()).all()
+    return render_template('admin_keys.html', keys=keys)
+
+@app.route('/admin/keys/create', methods=['POST'])
+@login_required
+@admin_required
+def admin_create_key():
+    label = (request.form.get('label') or '').strip()
+    days = int(request.form.get('days', 30))
+
+    # Sinh key 8 s\u1ed1 ng\u1eabu nhi\u00ean, \u0111\u1ea3m b\u1ea3o kh\u00f4ng tr\u00f9ng
+    while True:
+        new_key = ''.join(_random.choices(_string.digits, k=8))
+        if not ToolKey.query.filter_by(key=new_key).first():
+            break
+
+    tk = ToolKey(
+        key=new_key,
+        label=label,
+        expires_at=datetime.utcnow() + timedelta(days=days),
+        is_active=True
+    )
+    db.session.add(tk)
+    db.session.commit()
+    flash(f'Đã tạo key: {new_key} (hết hạn sau {days} ngày)', 'success')
+    return redirect(url_for('admin_keys'))
+
+@app.route('/admin/keys/delete/<int:key_id>', methods=['POST'])
+@login_required
+@admin_required
+def admin_delete_key(key_id):
+    tk = ToolKey.query.get_or_404(key_id)
+    db.session.delete(tk)
+    db.session.commit()
+    flash('Đã xóa key.', 'success')
+    return redirect(url_for('admin_keys'))
+
+@app.route('/admin/keys/toggle/<int:key_id>', methods=['POST'])
+@login_required
+@admin_required
+def admin_toggle_key(key_id):
+    tk = ToolKey.query.get_or_404(key_id)
+    tk.is_active = not tk.is_active
+    db.session.commit()
+    return jsonify({'success': True, 'is_active': tk.is_active})
+
 
 scheduler = BackgroundScheduler()
 scheduler.add_job(

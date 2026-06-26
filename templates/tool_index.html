@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Công Cụ Netflix</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background: linear-gradient(135deg, #0a0a0a 0%, #111827 50%, #0a0a0a 100%); min-height: 100vh; }
+        .card { background: rgba(17,24,39,0.85); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.08); transition: all 0.3s ease; }
+        .card:hover { border-color: rgba(255,255,255,0.2); transform: translateY(-2px); box-shadow: 0 20px 60px rgba(0,0,0,0.4); }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+    <div class="w-full max-w-2xl">
+        <div class="text-center mb-10">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-red-600 rounded-2xl mb-4 shadow-lg shadow-red-900/30">
+                <i class="fab fa-netflix text-3xl text-white"></i>
+            </div>
+            <h1 class="text-3xl font-black text-white mb-2">Công Cụ Netflix</h1>
+            <p class="text-sm text-gray-400">Chọn chức năng bạn cần sử dụng</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Sign In Code -->
+            <a href="/tools/signin" class="card rounded-2xl p-7 block group cursor-pointer no-underline">
+                <div class="w-12 h-12 bg-yellow-500/10 text-yellow-400 rounded-xl flex items-center justify-center mb-5 text-xl group-hover:bg-yellow-500/20 transition-colors">
+                    <i class="fas fa-sign-in-alt"></i>
+                </div>
+                <h2 class="text-lg font-bold text-white mb-2">Sign In Code</h2>
+                <p class="text-sm text-gray-400 leading-relaxed">Lấy mã hoặc link đăng nhập Netflix. Yêu cầu nhập <span class="text-yellow-400 font-semibold">Key truy cập</span> do Admin cấp.</p>
+                <div class="mt-4 text-yellow-400 text-xs font-bold flex items-center gap-1">
+                    Truy cập <i class="fas fa-arrow-right text-[10px]"></i>
+                </div>
+            </a>
+
+            <!-- Household -->
+            <a href="/tools/household" class="card rounded-2xl p-7 block group cursor-pointer no-underline">
+                <div class="w-12 h-12 bg-blue-500/10 text-blue-400 rounded-xl flex items-center justify-center mb-5 text-xl group-hover:bg-blue-500/20 transition-colors">
+                    <i class="fas fa-home"></i>
+                </div>
+                <h2 class="text-lg font-bold text-white mb-2">Household Update</h2>
+                <p class="text-sm text-gray-400 leading-relaxed">Lấy link cập nhật hộ gia đình Netflix khi được yêu cầu xác minh vị trí.</p>
+                <div class="mt-4 text-blue-400 text-xs font-bold flex items-center gap-1">
+                    Truy cập <i class="fas fa-arrow-right text-[10px]"></i>
+                </div>
+            </a>
+        </div>
+    </div>
+</body>
+</html>
