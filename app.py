@@ -1446,33 +1446,39 @@ def get_household_link(email):
             # Bấm nút Retrieve Access Info
             page.locator('text="Retrieve Access Info"').click()
 
-            # Chờ link Netflix hoặc mã 4 số xuất hiện trong HTML
+            # Patterns cần tìm
             nftoken_pattern = re.compile(
                 r'https://www\.netflix\.com/account/update-primary-location\?nftoken=[^\s"<]+'
             )
-            # Mã 4 số đứng riêng biệt (không nằm trong URL hay chuỗi dài)
-            code_pattern = re.compile(r'(?<!\d)(\d{4})(?!\d)')
+            # Mã 4 số nằm ngay trong block TRAVELING VERIFICATION CODE (không phải timestamp/năm)
+            # Bot HTML thường có: "TRAVELING VERIFICATION CODE</...>1234" hoặc tương tự
+            verification_block_pattern = re.compile(
+                r'TRAVELING VERIFICATION CODE[\s\S]{0,300}?>\s*([A-Z]+|\d{4})\s*<',
+                re.IGNORECASE
+            )
 
             deadline = time.time() + 30  # tối đa 30 giây
             while time.time() < deadline:
                 time.sleep(1.5)
                 html = page.content()
 
-                # Ưu tiên link Netflix trước
+                # 1. Ưu tiên link Netflix (Household link dài)
                 link_match = nftoken_pattern.search(html)
                 if link_match:
                     browser.close()
                     return link_match.group(0)
 
-                # Nếu không có link, kiểm tra mã 4 số xuất hiện trong khối kết quả
-                # Tìm trong đoạn HTML gần "RESULT FOUND" hoặc "VERIFICATION"
-                result_block = re.search(
-                    r'(?:RESULT FOUND|VERIFICATION CODE|verification).*?(\d{4})',
-                    html, re.IGNORECASE | re.DOTALL
-                )
-                if result_block:
+                # 2. Kiểm tra kết quả trong block TRAVELING VERIFICATION CODE
+                block_match = verification_block_pattern.search(html)
+                if block_match:
+                    val = block_match.group(1).strip()
                     browser.close()
-                    return f"Mã xác minh: {result_block.group(1)}"
+                    if val.upper() == 'EXPIRED':
+                        return "⚠️ Mã xác minh đã HẾT HẠN (EXPIRED). Bạn cần thử lại để lấy mã mới."
+                    elif val.isdigit() and len(val) == 4:
+                        return f"Mã xác minh: {val}"
+                    else:
+                        return f"Kết quả từ Bot: {val}"
 
             # Hết thời gian vẫn không có link
             browser.close()
