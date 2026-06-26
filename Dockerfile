@@ -9,4 +9,4 @@ RUN playwright install --with-deps chromium
 
 COPY . .
 
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "app:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--timeout", "120", "app:app"]

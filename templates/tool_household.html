@@ -10,75 +10,153 @@
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f8fafc; }
         .glass-panel { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .spin { animation: spin 1s linear infinite; display: inline-block; }
     </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
     <div class="glass-panel rounded-2xl shadow-2xl w-full max-w-lg p-8">
         <div class="text-center mb-8">
-            <div class="w-16 h-16 bg-blue-500/20 text-blue-400 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl shadow-sm border border-blue-500/30">
+            <div class="w-16 h-16 bg-blue-500/20 text-blue-400 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl border border-blue-500/30">
                 <i class="fas fa-home"></i>
             </div>
             <h1 class="text-2xl font-bold text-white">Cập Nhật Hộ Gia Đình</h1>
-            <p class="text-sm text-slate-400 mt-2">Nhập email tài khoản Netflix của bạn để lấy mã xác minh hoặc link cập nhật.</p>
+            <p class="text-sm text-slate-400 mt-2">Nhập email tài khoản Netflix để lấy mã hoặc link cập nhật hộ gia đình.</p>
         </div>
 
-        <form method="POST" class="space-y-6" id="householdForm">
+        <div class="space-y-6">
             <div>
                 <label class="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">Netflix Account Email</label>
                 <div class="relative">
                     <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
                         <i class="far fa-envelope"></i>
                     </div>
-                    <input type="email" name="email" placeholder="your@email.com" required
+                    <input type="email" id="emailInput" placeholder="your@email.com"
                            class="w-full bg-slate-900/50 border border-slate-700 rounded-xl pl-11 pr-4 py-3.5 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder-slate-600">
                 </div>
             </div>
-            <button type="submit" id="submitBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 border border-blue-500">
+            <button id="submitBtn" onclick="startHouseholdTask()"
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 border border-blue-500">
                 <i class="fas fa-search"></i> Lấy Link Xác Minh
             </button>
-        </form>
-
-        <div id="loadingBox" class="hidden mt-8 p-6 bg-slate-800/50 border border-slate-700 rounded-xl text-center">
-            <i class="fas fa-spinner fa-spin text-3xl text-blue-500 mb-3"></i>
-            <p class="text-sm text-slate-300 font-medium">Đang kết nối hệ thống, vui lòng chờ trong giây lát...</p>
         </div>
 
-        {% if result %}
-        <div class="mt-8 p-5 bg-slate-800 border border-slate-700 rounded-xl relative">
+        <!-- Loading state -->
+        <div id="loadingBox" class="hidden mt-8 p-6 bg-slate-800/50 border border-slate-700 rounded-xl text-center">
+            <i class="fas fa-spinner spin text-3xl text-blue-500 mb-3"></i>
+            <p class="text-sm text-slate-300 font-medium mt-3">Đang kết nối hệ thống, vui lòng đợi (~15-30 giây)...</p>
+        </div>
+
+        <!-- Result -->
+        <div id="resultBox" class="hidden mt-8 p-5 bg-slate-800 border border-slate-700 rounded-xl">
             <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Kết quả:</h3>
-            <div class="p-3 bg-slate-900 rounded-lg border border-slate-700 text-sm font-mono text-green-400 break-all">
-                {{ result }}
-            </div>
-            <div class="mt-4 flex gap-3">
-                <button onclick="copyResult()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-semibold py-2 rounded-lg transition-colors text-sm flex items-center justify-center gap-2">
-                    <i class="far fa-copy"></i> Copy Link
+            <div id="resultText" class="p-3 bg-slate-900 rounded-lg border border-slate-700 text-sm font-mono text-green-400 break-all"></div>
+            <div class="mt-4">
+                <button onclick="copyResult()" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-semibold py-2 rounded-lg transition-colors text-sm flex items-center justify-center gap-2">
+                    <i class="far fa-copy"></i> Copy Kết Quả
                 </button>
             </div>
         </div>
-        <script>
-            function copyResult() {
-                var text = {{ result|tojson|safe }};
-                navigator.clipboard.writeText(text).then(function() {
-                    alert("Đã copy thành công!");
-                }, function(err) {
-                    alert("Lỗi khi copy!");
-                });
-            }
-        </script>
-        {% endif %}
     </div>
 
     <script>
-        document.getElementById('householdForm').addEventListener('submit', function() {
-            document.getElementById('submitBtn').disabled = true;
-            document.getElementById('submitBtn').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang xử lý...';
-            document.getElementById('loadingBox').classList.remove('hidden');
-            
-            // Hide result if submitting again
-            var resultBox = document.querySelector('.mt-8.p-5.bg-slate-800');
-            if (resultBox) {
-                resultBox.classList.add('hidden');
+        let pollInterval = null;
+
+        async function startHouseholdTask() {
+            const email = document.getElementById('emailInput').value.trim();
+            if (!email) {
+                alert('Vui lòng nhập email Netflix!');
+                return;
             }
+
+            const btn = document.getElementById('submitBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner spin"></i> Đang khởi động...';
+
+            document.getElementById('loadingBox').classList.remove('hidden');
+            document.getElementById('resultBox').classList.add('hidden');
+
+            try {
+                const res = await fetch('/tools/household/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    pollForResult(data.task_id);
+                } else {
+                    showError(data.message || 'Không thể khởi động tác vụ.');
+                }
+            } catch (err) {
+                showError('Lỗi kết nối máy chủ: ' + err.message);
+            }
+        }
+
+        function pollForResult(taskId) {
+            let attempts = 0;
+            const maxAttempts = 40; // tối đa ~80s
+
+            pollInterval = setInterval(async () => {
+                attempts++;
+                try {
+                    const res = await fetch(`/tools/household/status/${taskId}`);
+                    const data = await res.json();
+
+                    if (data.status === 'done') {
+                        clearInterval(pollInterval);
+                        showResult(data.result);
+                    } else if (data.status === 'not_found' || attempts >= maxAttempts) {
+                        clearInterval(pollInterval);
+                        showError('Hết thời gian chờ. Vui lòng thử lại.');
+                    }
+                    // else: vẫn 'pending' → tiếp tục poll
+                } catch (err) {
+                    clearInterval(pollInterval);
+                    showError('Lỗi khi kiểm tra kết quả: ' + err.message);
+                }
+            }, 2000); // poll mỗi 2 giây
+        }
+
+        function showResult(result) {
+            document.getElementById('loadingBox').classList.add('hidden');
+            document.getElementById('resultBox').classList.remove('hidden');
+
+            const resultEl = document.getElementById('resultText');
+            if (result && result.includes('EXPIRED')) {
+                resultEl.className = 'p-3 bg-slate-900 rounded-lg border border-red-700 text-sm font-mono text-red-400 break-all';
+            } else {
+                resultEl.className = 'p-3 bg-slate-900 rounded-lg border border-slate-700 text-sm font-mono text-green-400 break-all';
+            }
+            resultEl.textContent = result || 'Không có kết quả.';
+
+            const btn = document.getElementById('submitBtn');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-search"></i> Lấy Link Xác Minh';
+        }
+
+        function showError(msg) {
+            document.getElementById('loadingBox').classList.add('hidden');
+            document.getElementById('resultBox').classList.remove('hidden');
+            const resultEl = document.getElementById('resultText');
+            resultEl.className = 'p-3 bg-slate-900 rounded-lg border border-red-700 text-sm font-mono text-red-400 break-all';
+            resultEl.textContent = msg;
+
+            const btn = document.getElementById('submitBtn');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-search"></i> Lấy Link Xác Minh';
+        }
+
+        function copyResult() {
+            const text = document.getElementById('resultText').textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Đã copy thành công!');
+            });
+        }
+
+        document.getElementById('emailInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') startHouseholdTask();
         });
     </script>
 </body>

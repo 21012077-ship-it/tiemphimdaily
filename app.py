@@ -1494,14 +1494,38 @@ def convert_cookie_tool():
         login_url = get_netflix_login_url(cookie)
     return render_template('tool_convert.html', login_url=login_url)
 
-@app.route('/tools/household', methods=['GET', 'POST'])
+# --- Household tool: dùng background thread để không block gunicorn ---
+import threading
+import uuid
+
+_household_tasks = {}   # task_id -> {'status': 'pending'/'done', 'result': ...}
+
+def _run_household_task(task_id, email):
+    result = get_household_link(email)
+    _household_tasks[task_id] = {'status': 'done', 'result': result}
+
+@app.route('/tools/household', methods=['GET'])
 def household_tool():
-    result = None
-    if request.method == 'POST':
-        email = request.form.get('email', '')
-        if email:
-            result = get_household_link(email)
-    return render_template('tool_household.html', result=result)
+    return render_template('tool_household.html')
+
+@app.route('/tools/household/start', methods=['POST'])
+def household_start():
+    data = request.get_json(silent=True) or {}
+    email = (data.get('email') or '').strip()
+    if not email:
+        return jsonify({'success': False, 'message': 'Thiếu email'})
+    task_id = str(uuid.uuid4())
+    _household_tasks[task_id] = {'status': 'pending', 'result': None}
+    t = threading.Thread(target=_run_household_task, args=(task_id, email), daemon=True)
+    t.start()
+    return jsonify({'success': True, 'task_id': task_id})
+
+@app.route('/tools/household/status/<task_id>', methods=['GET'])
+def household_status(task_id):
+    task = _household_tasks.get(task_id)
+    if not task:
+        return jsonify({'status': 'not_found'})
+    return jsonify({'status': task['status'], 'result': task.get('result')})
 
 scheduler = BackgroundScheduler()
 scheduler.add_job(
