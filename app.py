@@ -1446,23 +1446,37 @@ def get_household_link(email):
             # Bấm nút Retrieve Access Info
             page.locator('text="Retrieve Access Info"').click()
 
-            # Chờ link Netflix xuất hiện trực tiếp trong HTML (thay vì chờ text "RESULT FOUND")
+            # Chờ link Netflix hoặc mã 4 số xuất hiện trong HTML
             nftoken_pattern = re.compile(
                 r'https://www\.netflix\.com/account/update-primary-location\?nftoken=[^\s"<]+'
             )
+            # Mã 4 số đứng riêng biệt (không nằm trong URL hay chuỗi dài)
+            code_pattern = re.compile(r'(?<!\d)(\d{4})(?!\d)')
 
             deadline = time.time() + 30  # tối đa 30 giây
             while time.time() < deadline:
                 time.sleep(1.5)
                 html = page.content()
-                match = nftoken_pattern.search(html)
-                if match:
+
+                # Ưu tiên link Netflix trước
+                link_match = nftoken_pattern.search(html)
+                if link_match:
                     browser.close()
-                    return match.group(0)
+                    return link_match.group(0)
+
+                # Nếu không có link, kiểm tra mã 4 số xuất hiện trong khối kết quả
+                # Tìm trong đoạn HTML gần "RESULT FOUND" hoặc "VERIFICATION"
+                result_block = re.search(
+                    r'(?:RESULT FOUND|VERIFICATION CODE|verification).*?(\d{4})',
+                    html, re.IGNORECASE | re.DOTALL
+                )
+                if result_block:
+                    browser.close()
+                    return f"Mã xác minh: {result_block.group(1)}"
 
             # Hết thời gian vẫn không có link
             browser.close()
-            return "Hết thời gian chờ (30s). Bot chưa trả về link. Vui lòng thử lại sau."
+            return "Hết thời gian chờ (30s). Bot chưa trả về kết quả. Vui lòng thử lại sau."
     except Exception as e:
         return f"Lỗi hệ thống Playwright: {str(e)}"
 
