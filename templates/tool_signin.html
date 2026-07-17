@@ -20,8 +20,8 @@
             content: '';
             position: fixed; inset: 0;
             background:
-                radial-gradient(ellipse 60% 50% at 20% 40%, rgba(220,38,38,0.12) 0%, transparent 60%),
-                radial-gradient(ellipse 50% 40% at 80% 70%, rgba(234,179,8,0.07) 0%, transparent 55%);
+                radial-gradient(ellipse 60% 50% at 20% 40%, rgba(234,179,8,0.12) 0%, transparent 60%),
+                radial-gradient(ellipse 50% 40% at 80% 70%, rgba(245,158,11,0.07) 0%, transparent 55%);
             pointer-events: none;
         }
 
@@ -37,11 +37,11 @@
 
         .logo {
             width: 48px; height: 48px;
-            background: #e50914; border-radius: 10px;
+            background: #f59e0b; border-radius: 10px;
             display: flex; align-items: center; justify-content: center;
-            font-size: 24px; font-weight: 900; color: white;
+            font-size: 22px; font-weight: 900; color: #000;
             margin: 0 auto 20px;
-            box-shadow: 0 8px 24px rgba(229,9,20,0.35);
+            box-shadow: 0 8px 24px rgba(245,158,11,0.35);
         }
 
         h1 { color: #fff; font-size: 20px; font-weight: 700; text-align: center; margin-bottom: 4px; }
@@ -73,9 +73,9 @@
             text-align: center; padding-left: 16px;
         }
         input:focus {
-            border-color: rgba(229,9,20,0.5);
+            border-color: rgba(245,158,11,0.5);
             background: rgba(255,255,255,0.06);
-            box-shadow: 0 0 0 3px rgba(229,9,20,0.08);
+            box-shadow: 0 0 0 3px rgba(245,158,11,0.08);
         }
         input::placeholder { color: #374151; letter-spacing: normal; font-size: 14px; font-weight: 400; }
         .toggle-pw {
@@ -86,15 +86,15 @@
         .toggle-pw:hover { color: #9ca3af; }
 
         .btn {
-            width: 100%; background: #e50914; color: #fff; border: none;
+            width: 100%; background: #f59e0b; color: #000; border: none;
             border-radius: 12px; padding: 14px;
             font-size: 14px; font-weight: 700; font-family: 'Inter', sans-serif;
             cursor: pointer; transition: background .2s, transform .1s, box-shadow .2s;
             margin-top: 4px;
             display: flex; align-items: center; justify-content: center; gap: 8px;
-            box-shadow: 0 4px 16px rgba(229,9,20,0.3);
+            box-shadow: 0 4px 16px rgba(245,158,11,0.3);
         }
-        .btn:hover { background: #c0070f; box-shadow: 0 6px 24px rgba(229,9,20,0.4); }
+        .btn:hover { background: #d97706; box-shadow: 0 6px 24px rgba(245,158,11,0.4); }
         .btn:active { transform: scale(0.98); }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
@@ -174,7 +174,7 @@
         <p class="subtitle">Nhập key do Admin cấp để tiếp tục</p>
 
         <div class="form-group">
-            <label><i class="fas fa-key" style="margin-right:5px;color:#e50914"></i>Key Truy Cập</label>
+            <label><i class="fas fa-key" style="margin-right:5px;color:#f59e0b"></i>Key Truy Cập</label>
             <div class="input-wrap">
                 <input type="password" id="keyInput" class="key-field" maxlength="8"
                        placeholder="••••••••" autocomplete="off">
@@ -204,7 +204,7 @@
         </div>
 
         <div class="form-group">
-            <label><i class="far fa-envelope" style="margin-right:5px;color:#e50914"></i>Netflix Account Email</label>
+            <label><i class="far fa-envelope" style="margin-right:5px;color:#f59e0b"></i>Netflix Account Email</label>
             <div class="input-wrap">
                 <i class="fas fa-at left"></i>
                 <input type="email" id="emailInput" placeholder="your@email.com" autocomplete="email"
@@ -218,7 +218,7 @@
 
         <!-- Loading -->
         <div class="loading-box" id="loadingBox">
-            <i class="fas fa-spinner spin" style="font-size:28px;color:#e50914"></i>
+            <i class="fas fa-spinner spin" style="font-size:28px;color:#f59e0b"></i>
             <p>Đang xử lý, vui lòng đợi (~15–30 giây)...</p>
         </div>
 
