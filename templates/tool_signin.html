@@ -3,135 +3,326 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sign In Code – Netflix Tool</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <title>Đăng nhập – Netflix Tool</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body { font-family: 'Inter', sans-serif; background: linear-gradient(135deg, #0a0a0a 0%, #111827 50%, #0a0a0a 100%); }
-        .glass { background: rgba(17,24,39,0.85); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.08); }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            background: #0a0a0a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Nền gradient động */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse 60% 50% at 20% 40%, rgba(220,38,38,0.12) 0%, transparent 60%),
+                radial-gradient(ellipse 50% 40% at 80% 70%, rgba(234,179,8,0.07) 0%, transparent 55%);
+            pointer-events: none;
+        }
+
+        .card {
+            width: 100%;
+            max-width: 400px;
+            background: rgba(15, 15, 15, 0.92);
+            border: 1px solid rgba(255,255,255,0.09);
+            border-radius: 20px;
+            padding: 40px 36px;
+            position: relative;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.03);
+        }
+
+        /* Logo Netflix N */
+        .logo {
+            width: 48px; height: 48px;
+            background: #e50914;
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 24px; font-weight: 900;
+            color: white;
+            margin: 0 auto 20px;
+            letter-spacing: -1px;
+            box-shadow: 0 8px 24px rgba(229,9,20,0.35);
+        }
+
+        h1 { color: #fff; font-size: 20px; font-weight: 700; text-align: center; margin-bottom: 4px; }
+        .subtitle { color: #6b7280; font-size: 13px; text-align: center; margin-bottom: 32px; }
+
+        .form-group { margin-bottom: 16px; }
+
+        label {
+            display: block;
+            font-size: 11px;
+            font-weight: 700;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 7px;
+        }
+
+        .input-wrap { position: relative; }
+
+        .input-wrap i.left {
+            position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+            color: #4b5563; font-size: 14px; pointer-events: none;
+        }
+
+        input {
+            width: 100%;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 13px 16px 13px 42px;
+            color: #fff;
+            font-size: 14px;
+            font-family: 'Inter', sans-serif;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+        }
+        input:focus {
+            border-color: rgba(229,9,20,0.5);
+            background: rgba(255,255,255,0.06);
+            box-shadow: 0 0 0 3px rgba(229,9,20,0.08);
+        }
+        input::placeholder { color: #4b5563; }
+        input.key-input {
+            font-family: 'Inter', monospace;
+            letter-spacing: 0.2em;
+            font-size: 18px;
+            font-weight: 700;
+            text-align: center;
+            padding-left: 16px;
+        }
+
+        .toggle-pw {
+            position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+            background: none; border: none; color: #4b5563; cursor: pointer;
+            font-size: 14px; padding: 0; transition: color 0.2s;
+        }
+        .toggle-pw:hover { color: #9ca3af; }
+
+        .btn {
+            width: 100%;
+            background: #e50914;
+            color: #fff;
+            border: none;
+            border-radius: 12px;
+            padding: 14px;
+            font-size: 14px;
+            font-weight: 700;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+            margin-top: 8px;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            box-shadow: 0 4px 16px rgba(229,9,20,0.3);
+        }
+        .btn:hover { background: #c0070f; box-shadow: 0 6px 24px rgba(229,9,20,0.4); }
+        .btn:active { transform: scale(0.98); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+        /* Badge trạng thái key */
+        .key-status {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            border-radius: 12px;
+            padding: 12px 16px;
+            margin-bottom: 16px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .key-status.checking { background: rgba(234,179,8,0.08); border: 1px solid rgba(234,179,8,0.2); color: #fbbf24; }
+        .key-status.valid    { background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.2); color: #4ade80; }
+        .key-status.invalid  {
+            flex-direction: column; align-items: center; text-align: center;
+            background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2); color: #f87171;
+            padding: 28px 20px; gap: 12px;
+        }
+        .key-status.invalid .ban-icon {
+            width: 52px; height: 52px;
+            background: rgba(239,68,68,0.12);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 22px;
+            border: 1px solid rgba(239,68,68,0.2);
+        }
+        .key-status.invalid .err-title { font-size: 14px; font-weight: 700; color: #fca5a5; }
+        .key-status.invalid .err-msg   { font-size: 12px; color: rgba(248,113,113,0.7); margin-top: 2px; line-height: 1.5; }
+
+        /* Loading & result */
+        .loading-box {
+            display: none;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.07);
+            border-radius: 12px;
+            padding: 24px;
+            text-align: center;
+            margin-top: 16px;
+        }
+        .loading-box p { color: #9ca3af; font-size: 12px; margin-top: 10px; }
+
+        .result-box {
+            display: none;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 16px;
+        }
+        .result-label { font-size: 10px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+        .result-value {
+            background: rgba(0,0,0,0.4);
+            border-radius: 8px;
+            padding: 12px 14px;
+            font-family: monospace;
+            font-size: 13px;
+            word-break: break-all;
+            line-height: 1.6;
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+        .result-value.success { color: #fbbf24; }
+        .result-value.warning { color: #fb923c; border-color: rgba(251,146,60,0.2); }
+        .result-value.error   { color: #f87171; border-color: rgba(248,113,113,0.2); }
+
+        .copy-btn {
+            width: 100%; margin-top: 10px;
+            background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 8px; padding: 9px;
+            color: #9ca3af; font-size: 12px; font-weight: 600;
+            cursor: pointer; transition: background 0.2s; font-family: 'Inter', sans-serif;
+            display: flex; align-items: center; justify-content: center; gap: 6px;
+        }
+        .copy-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
         @keyframes spin { to { transform: rotate(360deg); } }
-        .spin { animation: spin 1s linear infinite; display: inline-block; }
+        .spin { display: inline-block; animation: spin 1s linear infinite; }
     </style>
 </head>
-<body class="min-h-screen flex items-center justify-center p-4">
-    <div class="glass rounded-2xl shadow-2xl w-full max-w-md p-8">
+<body>
+    <div class="card">
+        <!-- Logo -->
+        <div class="logo">N</div>
+        <h1>Đăng nhập</h1>
+        <p class="subtitle" id="pageSubtitle">Nhập key truy cập và email Netflix của bạn</p>
 
-        <!-- Header -->
-        <div class="text-center mb-8">
-            <a href="/tools" class="inline-flex items-center text-gray-500 hover:text-gray-300 text-xs mb-4 transition-colors">
-                <i class="fas fa-arrow-left mr-1"></i> Quay lại
-            </a>
-            <div class="w-14 h-14 bg-yellow-500/15 text-yellow-400 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl border border-yellow-500/20">
-                <i class="fas fa-sign-in-alt"></i>
-            </div>
-            <h1 class="text-xl font-bold text-white">Sign In Code</h1>
-            <p id="pageDesc" class="text-xs text-gray-400 mt-1">Nhập key truy cập và email Netflix để lấy mã đăng nhập.</p>
-        </div>
+        <!-- Badge trạng thái key (hiện khi có key trong URL) -->
+        <div class="key-status" id="keyStatusBadge"></div>
 
         <!-- Form -->
-        <div class="space-y-4">
-            <!-- Key truy cập - ẩn đi nếu key có trong URL -->
-            <div id="keySection">
-                <label class="block text-xs font-bold text-gray-400 mb-1.5 uppercase tracking-wider">
-                    <i class="fas fa-key mr-1 text-yellow-500"></i> Key Truy Cập
-                </label>
-                <input type="text" id="keyInput" maxlength="8" placeholder="Nhập key 8 số do Admin cấp..."
-                       class="w-full bg-black/40 border border-gray-700 rounded-xl px-4 py-3 text-sm text-white focus:ring-2 focus:ring-yellow-500 outline-none transition-all placeholder-gray-600 font-mono tracking-widest text-center text-lg font-bold">
-            </div>
-
-            <!-- Thông báo key đã được nhúng trong link -->
-            <div id="keyPrefilledBadge" class="hidden items-center gap-2 bg-yellow-500/10 border border-yellow-500/20 rounded-xl px-4 py-2.5">
-                <i class="fas fa-check-circle text-yellow-400 text-sm"></i>
-                <span class="text-xs text-yellow-300 font-semibold">Key đã được xác thực sẵn – Chỉ cần nhập email!</span>
+        <div id="mainForm">
+            <!-- Key -->
+            <div class="form-group" id="keySection">
+                <label><i class="fas fa-key" style="margin-right:5px;color:#e50914"></i>Key Truy Cập</label>
+                <div class="input-wrap">
+                    <input type="password" id="keyInput" class="key-input" maxlength="8" placeholder="••••••••" autocomplete="off">
+                    <button type="button" class="toggle-pw" onclick="toggleKeyVisibility(this)">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                </div>
             </div>
 
             <!-- Email -->
-            <div>
-                <label class="block text-xs font-bold text-gray-400 mb-1.5 uppercase tracking-wider">
-                    <i class="far fa-envelope mr-1 text-yellow-500"></i> Netflix Account Email
-                </label>
-                <input type="email" id="emailInput" placeholder="your@email.com"
-                       class="w-full bg-black/40 border border-gray-700 rounded-xl px-4 py-3 text-sm text-white focus:ring-2 focus:ring-yellow-500 outline-none transition-all placeholder-gray-600">
+            <div class="form-group">
+                <label><i class="far fa-envelope" style="margin-right:5px;color:#e50914"></i>Netflix Account Email</label>
+                <div class="input-wrap">
+                    <i class="fas fa-at left"></i>
+                    <input type="email" id="emailInput" placeholder="your@email.com" autocomplete="email">
+                </div>
             </div>
 
-            <button id="submitBtn" onclick="startSignInTask()"
-                    class="w-full bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-3.5 px-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 mt-2">
-                <i class="fas fa-search"></i> Lấy Mã Đăng Nhập
+            <button class="btn" id="submitBtn" onclick="startSignInTask()">
+                <i class="fas fa-sign-in-alt"></i> Lấy Mã Đăng Nhập
             </button>
         </div>
 
         <!-- Loading -->
-        <div id="loadingBox" class="hidden mt-6 p-5 bg-black/30 border border-gray-700 rounded-xl text-center">
-            <i class="fas fa-spinner spin text-2xl text-yellow-400 mb-2"></i>
-            <p class="text-xs text-gray-300 font-medium mt-2">Đang xử lý, vui lòng đợi (~15-30 giây)...</p>
+        <div class="loading-box" id="loadingBox">
+            <i class="fas fa-spinner spin" style="font-size:28px;color:#e50914"></i>
+            <p>Đang xử lý, vui lòng đợi (~15–30 giây)...</p>
         </div>
 
-        <!-- Result -->
-        <div id="resultBox" class="hidden mt-6 p-5 bg-black/30 border border-gray-700 rounded-xl">
-            <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Kết quả:</h3>
-            <div id="resultText" class="p-3 bg-black/50 rounded-lg border border-gray-700 text-sm font-mono text-yellow-300 break-all leading-relaxed"></div>
-            <button onclick="copyResult()" class="mt-3 w-full bg-gray-800 hover:bg-gray-700 text-white font-semibold py-2 rounded-lg transition-colors text-sm flex items-center justify-center gap-2">
-                <i class="far fa-copy"></i> Copy Kết Quả
-            </button>
+        <!-- Kết quả -->
+        <div class="result-box" id="resultBox">
+            <div class="result-label">Kết quả</div>
+            <div class="result-value success" id="resultText"></div>
+            <button class="copy-btn" onclick="copyResult()"><i class="far fa-copy"></i> Copy Kết Quả</button>
         </div>
     </div>
 
     <script>
         let pollInterval = null;
 
-        // ─── Đọc key từ URL param & kiểm tra hết hạn ngay khi tải trang ───
+        // ── Đọc key từ URL, kiểm tra hợp lệ ngay khi load ──
         window.addEventListener('DOMContentLoaded', async function () {
             const params = new URLSearchParams(window.location.search);
             const keyFromUrl = params.get('key');
             if (!keyFromUrl) return;
 
-            // Điền key vào input ẩn
+            // Điền key ẩn, ẩn ô nhập key
             document.getElementById('keyInput').value = keyFromUrl;
+            document.getElementById('keySection').style.display = 'none';
 
-            // Ẩn ô nhập key, hiện badge đang kiểm tra
-            document.getElementById('keySection').classList.add('hidden');
-            const badge = document.getElementById('keyPrefilledBadge');
-            badge.classList.remove('hidden');
-            badge.classList.add('flex');
-            badge.innerHTML = '<i class="fas fa-spinner spin text-yellow-400 text-sm"></i><span class="text-xs text-yellow-300 font-semibold">Đang xác minh key...</span>';
+            const badge = document.getElementById('keyStatusBadge');
+            badge.className = 'key-status checking';
+            badge.style.display = 'flex';
+            badge.innerHTML = '<i class="fas fa-spinner spin"></i> Đang xác minh key...';
+            document.getElementById('pageSubtitle').textContent = 'Nhập email Netflix của bạn để tiếp tục';
 
             try {
                 const res = await fetch(`/tools/signin/check-key?key=${encodeURIComponent(keyFromUrl)}`);
                 const data = await res.json();
 
                 if (data.valid) {
-                    // Key hợp lệ → hiện badge xanh, focus email
-                    badge.className = 'flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-2.5';
-                    badge.innerHTML = `<i class="fas fa-check-circle text-green-400 text-sm"></i><span class="text-xs text-green-300 font-semibold">Key hợp lệ – Còn ${data.days_left} ngày. Chỉ cần nhập email!</span>`;
+                    badge.className = 'key-status valid';
+                    badge.innerHTML = `<i class="fas fa-check-circle"></i> Key hợp lệ – còn ${data.days_left} ngày`;
                     document.getElementById('emailInput').focus();
                 } else {
-                    // Key hết hạn / không tồn tại → khóa form, hiện lỗi đỏ
                     lockForm(data.message);
                 }
             } catch (err) {
-                badge.className = 'flex items-center gap-2 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-2.5';
-                badge.innerHTML = '<i class="fas fa-exclamation-triangle text-red-400 text-sm"></i><span class="text-xs text-red-300 font-semibold">Không thể kiểm tra key. Vui lòng thử lại.</span>';
+                badge.className = 'key-status checking';
+                badge.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Không thể kiểm tra key. Vui lòng tải lại trang.';
             }
         });
 
         function lockForm(message) {
-            // Ẩn form
-            document.querySelector('.space-y-4').classList.add('hidden');
+            document.getElementById('mainForm').style.display = 'none';
+            document.getElementById('pageSubtitle').textContent = '';
 
-            // Hiện thẻ lỗi lớn
-            const badge = document.getElementById('keyPrefilledBadge');
-            badge.className = 'flex flex-col items-center gap-3 bg-red-500/10 border border-red-500/30 rounded-2xl px-6 py-8 text-center mt-2';
+            const badge = document.getElementById('keyStatusBadge');
+            badge.className = 'key-status invalid';
+            badge.style.display = 'flex';
             badge.innerHTML = `
-                <div class="w-14 h-14 bg-red-500/15 rounded-full flex items-center justify-center text-3xl text-red-400 border border-red-500/20">
-                    <i class="fas fa-ban"></i>
-                </div>
+                <div class="ban-icon"><i class="fas fa-ban"></i></div>
                 <div>
-                    <p class="text-sm font-bold text-red-300 mb-1">Truy cập bị từ chối</p>
-                    <p class="text-xs text-red-400/80 leading-relaxed">${message}</p>
+                    <div class="err-title">Truy cập bị từ chối</div>
+                    <div class="err-msg">${message}</div>
                 </div>
             `;
-            badge.classList.remove('hidden');
+        }
+
+        function toggleKeyVisibility(btn) {
+            const input = document.getElementById('keyInput');
+            const icon = btn.querySelector('i');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.className = 'fas fa-eye-slash';
+            } else {
+                input.type = 'password';
+                icon.className = 'fas fa-eye';
+            }
         }
 
         async function startSignInTask() {
@@ -145,9 +336,9 @@
 
             const btn = document.getElementById('submitBtn');
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner spin"></i> Đang xác minh key...';
-            document.getElementById('loadingBox').classList.remove('hidden');
-            document.getElementById('resultBox').classList.add('hidden');
+            btn.innerHTML = '<i class="fas fa-spinner spin"></i> Đang xác minh...';
+            document.getElementById('loadingBox').style.display = 'block';
+            document.getElementById('resultBox').style.display = 'none';
 
             try {
                 const res = await fetch('/tools/signin/start', {
@@ -161,10 +352,16 @@
                     btn.innerHTML = '<i class="fas fa-spinner spin"></i> Đang xử lý...';
                     pollForResult(data.task_id);
                 } else {
+                    document.getElementById('loadingBox').style.display = 'none';
                     showResult(data.message, 'error');
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Lấy Mã Đăng Nhập';
                 }
             } catch (err) {
+                document.getElementById('loadingBox').style.display = 'none';
                 showResult('Lỗi kết nối máy chủ: ' + err.message, 'error');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Lấy Mã Đăng Nhập';
             }
         }
 
@@ -177,34 +374,33 @@
                     const data = await res.json();
                     if (data.status === 'done') {
                         clearInterval(pollInterval);
+                        document.getElementById('loadingBox').style.display = 'none';
                         showResult(data.result, data.result && data.result.includes('⚠️') ? 'warning' : 'success');
+                        const btn = document.getElementById('submitBtn');
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Lấy Mã Đăng Nhập';
                     } else if (data.status === 'not_found' || attempts >= 50) {
                         clearInterval(pollInterval);
+                        document.getElementById('loadingBox').style.display = 'none';
                         showResult('Hết thời gian chờ. Vui lòng thử lại.', 'error');
+                        const btn = document.getElementById('submitBtn');
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Lấy Mã Đăng Nhập';
                     }
                 } catch (err) {
                     clearInterval(pollInterval);
+                    document.getElementById('loadingBox').style.display = 'none';
                     showResult('Lỗi: ' + err.message, 'error');
                 }
             }, 2000);
         }
 
         function showResult(text, type = 'success') {
-            document.getElementById('loadingBox').classList.add('hidden');
-            document.getElementById('resultBox').classList.remove('hidden');
-
+            const box = document.getElementById('resultBox');
             const el = document.getElementById('resultText');
-            const colors = {
-                'success': 'text-yellow-300 border-gray-700',
-                'warning': 'text-orange-400 border-orange-800',
-                'error': 'text-red-400 border-red-800'
-            };
-            el.className = `p-3 bg-black/50 rounded-lg border text-sm font-mono break-all leading-relaxed ${colors[type] || colors.success}`;
+            box.style.display = 'block';
+            el.className = `result-value ${type}`;
             el.textContent = text || 'Không có kết quả.';
-
-            const btn = document.getElementById('submitBtn');
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-search"></i> Lấy Mã Đăng Nhập';
         }
 
         function copyResult() {
