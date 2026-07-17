@@ -12,19 +12,13 @@
             font-family: 'Inter', sans-serif;
             min-height: 100vh;
             background: #0a0a0a;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            display: flex; align-items: center; justify-content: center;
             padding: 16px;
-            position: relative;
-            overflow: hidden;
+            position: relative; overflow: hidden;
         }
-
-        /* Nền gradient động */
         body::before {
             content: '';
-            position: fixed;
-            inset: 0;
+            position: fixed; inset: 0;
             background:
                 radial-gradient(ellipse 60% 50% at 20% 40%, rgba(220,38,38,0.12) 0%, transparent 60%),
                 radial-gradient(ellipse 50% 40% at 80% 70%, rgba(234,179,8,0.07) 0%, transparent 55%);
@@ -32,99 +26,71 @@
         }
 
         .card {
-            width: 100%;
-            max-width: 400px;
-            background: rgba(15, 15, 15, 0.92);
+            width: 100%; max-width: 400px;
+            background: rgba(15,15,15,0.92);
             border: 1px solid rgba(255,255,255,0.09);
             border-radius: 20px;
             padding: 40px 36px;
-            position: relative;
             backdrop-filter: blur(20px);
             box-shadow: 0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.03);
         }
 
-        /* Logo Netflix N */
         .logo {
             width: 48px; height: 48px;
-            background: #e50914;
-            border-radius: 10px;
+            background: #e50914; border-radius: 10px;
             display: flex; align-items: center; justify-content: center;
-            font-size: 24px; font-weight: 900;
-            color: white;
+            font-size: 24px; font-weight: 900; color: white;
             margin: 0 auto 20px;
-            letter-spacing: -1px;
             box-shadow: 0 8px 24px rgba(229,9,20,0.35);
         }
 
         h1 { color: #fff; font-size: 20px; font-weight: 700; text-align: center; margin-bottom: 4px; }
-        .subtitle { color: #6b7280; font-size: 13px; text-align: center; margin-bottom: 32px; }
+        .subtitle { color: #6b7280; font-size: 13px; text-align: center; margin-bottom: 28px; line-height: 1.5; }
 
         .form-group { margin-bottom: 16px; }
-
         label {
-            display: block;
-            font-size: 11px;
-            font-weight: 700;
-            color: #9ca3af;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            margin-bottom: 7px;
+            display: block; font-size: 11px; font-weight: 700;
+            color: #9ca3af; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 7px;
         }
-
         .input-wrap { position: relative; }
-
         .input-wrap i.left {
             position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
             color: #4b5563; font-size: 14px; pointer-events: none;
         }
-
         input {
             width: 100%;
             background: rgba(255,255,255,0.04);
             border: 1px solid rgba(255,255,255,0.1);
             border-radius: 12px;
-            padding: 13px 16px 13px 42px;
-            color: #fff;
-            font-size: 14px;
+            padding: 13px 44px 13px 42px;
+            color: #fff; font-size: 14px;
             font-family: 'Inter', sans-serif;
             outline: none;
-            transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+            transition: border-color .2s, box-shadow .2s, background .2s;
+        }
+        input.key-field {
+            letter-spacing: 0.25em; font-size: 20px; font-weight: 700;
+            text-align: center; padding-left: 16px;
         }
         input:focus {
             border-color: rgba(229,9,20,0.5);
             background: rgba(255,255,255,0.06);
             box-shadow: 0 0 0 3px rgba(229,9,20,0.08);
         }
-        input::placeholder { color: #4b5563; }
-        input.key-input {
-            font-family: 'Inter', monospace;
-            letter-spacing: 0.2em;
-            font-size: 18px;
-            font-weight: 700;
-            text-align: center;
-            padding-left: 16px;
-        }
-
+        input::placeholder { color: #374151; letter-spacing: normal; font-size: 14px; font-weight: 400; }
         .toggle-pw {
             position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
             background: none; border: none; color: #4b5563; cursor: pointer;
-            font-size: 14px; padding: 0; transition: color 0.2s;
+            font-size: 14px; padding: 0; transition: color .2s;
         }
         .toggle-pw:hover { color: #9ca3af; }
 
         .btn {
-            width: 100%;
-            background: #e50914;
-            color: #fff;
-            border: none;
-            border-radius: 12px;
-            padding: 14px;
-            font-size: 14px;
-            font-weight: 700;
-            font-family: 'Inter', sans-serif;
-            cursor: pointer;
-            transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
-            margin-top: 8px;
+            width: 100%; background: #e50914; color: #fff; border: none;
+            border-radius: 12px; padding: 14px;
+            font-size: 14px; font-weight: 700; font-family: 'Inter', sans-serif;
+            cursor: pointer; transition: background .2s, transform .1s, box-shadow .2s;
+            margin-top: 4px;
             display: flex; align-items: center; justify-content: center; gap: 8px;
             box-shadow: 0 4px 16px rgba(229,9,20,0.3);
         }
@@ -132,120 +98,123 @@
         .btn:active { transform: scale(0.98); }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
-        /* Badge trạng thái key */
-        .key-status {
-            display: none;
-            align-items: center;
-            gap: 10px;
-            border-radius: 12px;
-            padding: 12px 16px;
-            margin-bottom: 16px;
-            font-size: 12px;
-            font-weight: 600;
+        /* Trạng thái key ở bước 2 */
+        .key-badge {
+            display: flex; align-items: center; gap: 8px;
+            background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.2);
+            border-radius: 10px; padding: 10px 14px;
+            margin-bottom: 20px;
         }
-        .key-status.checking { background: rgba(234,179,8,0.08); border: 1px solid rgba(234,179,8,0.2); color: #fbbf24; }
-        .key-status.valid    { background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.2); color: #4ade80; }
-        .key-status.invalid  {
-            flex-direction: column; align-items: center; text-align: center;
-            background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2); color: #f87171;
-            padding: 28px 20px; gap: 12px;
+        .key-badge i { color: #4ade80; font-size: 13px; }
+        .key-badge span { font-size: 12px; font-weight: 600; color: #4ade80; }
+        .key-badge .key-val { font-family: monospace; letter-spacing: .15em; font-size: 13px; color: #86efac; margin-left: auto; }
+
+        /* Trạng thái lỗi (key hết hạn) */
+        .locked-screen {
+            text-align: center; padding: 20px 0 8px;
         }
-        .key-status.invalid .ban-icon {
-            width: 52px; height: 52px;
-            background: rgba(239,68,68,0.12);
-            border-radius: 50%;
+        .locked-screen .ban-wrap {
+            width: 64px; height: 64px;
+            background: rgba(239,68,68,0.1); border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
-            font-size: 22px;
+            font-size: 28px; color: #f87171;
             border: 1px solid rgba(239,68,68,0.2);
+            margin: 0 auto 16px;
         }
-        .key-status.invalid .err-title { font-size: 14px; font-weight: 700; color: #fca5a5; }
-        .key-status.invalid .err-msg   { font-size: 12px; color: rgba(248,113,113,0.7); margin-top: 2px; line-height: 1.5; }
+        .locked-screen h2 { color: #fca5a5; font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+        .locked-screen p { color: rgba(248,113,113,0.7); font-size: 13px; line-height: 1.6; }
 
-        /* Loading & result */
+        /* Loading + result */
         .loading-box {
-            display: none;
-            background: rgba(255,255,255,0.03);
-            border: 1px solid rgba(255,255,255,0.07);
-            border-radius: 12px;
-            padding: 24px;
-            text-align: center;
-            margin-top: 16px;
+            display: none; text-align: center;
+            background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07);
+            border-radius: 12px; padding: 24px; margin-top: 14px;
         }
-        .loading-box p { color: #9ca3af; font-size: 12px; margin-top: 10px; }
+        .loading-box p { color: #6b7280; font-size: 12px; margin-top: 10px; }
 
-        .result-box {
-            display: none;
-            background: rgba(255,255,255,0.03);
-            border: 1px solid rgba(255,255,255,0.08);
-            border-radius: 12px;
-            padding: 16px;
-            margin-top: 16px;
-        }
-        .result-label { font-size: 10px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+        .result-box { display: none; margin-top: 14px; }
+        .result-label { font-size: 10px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }
         .result-value {
-            background: rgba(0,0,0,0.4);
-            border-radius: 8px;
-            padding: 12px 14px;
-            font-family: monospace;
-            font-size: 13px;
-            word-break: break-all;
-            line-height: 1.6;
+            background: rgba(0,0,0,0.45); border-radius: 10px;
+            padding: 14px; font-family: monospace; font-size: 13px;
+            word-break: break-all; line-height: 1.6;
             border: 1px solid rgba(255,255,255,0.06);
         }
         .result-value.success { color: #fbbf24; }
-        .result-value.warning { color: #fb923c; border-color: rgba(251,146,60,0.2); }
-        .result-value.error   { color: #f87171; border-color: rgba(248,113,113,0.2); }
-
+        .result-value.warning { color: #fb923c; border-color: rgba(251,146,60,.2); }
+        .result-value.error   { color: #f87171; border-color: rgba(248,113,113,.2); }
         .copy-btn {
             width: 100%; margin-top: 10px;
-            background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08);
-            border-radius: 8px; padding: 9px;
-            color: #9ca3af; font-size: 12px; font-weight: 600;
-            cursor: pointer; transition: background 0.2s; font-family: 'Inter', sans-serif;
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 8px; padding: 9px; color: #9ca3af; font-size: 12px;
+            font-weight: 600; cursor: pointer; transition: background .2s;
+            font-family: 'Inter', sans-serif;
             display: flex; align-items: center; justify-content: center; gap: 6px;
         }
         .copy-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
 
         @keyframes spin { to { transform: rotate(360deg); } }
         .spin { display: inline-block; animation: spin 1s linear infinite; }
+
+        /* error shake */
+        @keyframes shake { 0%,100%{transform:translateX(0)} 20%,60%{transform:translateX(-6px)} 40%,80%{transform:translateX(6px)} }
+        .shake { animation: shake .35s ease; }
     </style>
 </head>
 <body>
-    <div class="card">
-        <!-- Logo -->
-        <div class="logo">N</div>
-        <h1>Đăng nhập</h1>
-        <p class="subtitle" id="pageSubtitle">Nhập key truy cập và email Netflix của bạn</p>
+<div class="card" id="card">
 
-        <!-- Badge trạng thái key (hiện khi có key trong URL) -->
-        <div class="key-status" id="keyStatusBadge"></div>
+    <div class="logo">N</div>
 
-        <!-- Form -->
-        <div id="mainForm">
-            <!-- Key -->
-            <div class="form-group" id="keySection">
-                <label><i class="fas fa-key" style="margin-right:5px;color:#e50914"></i>Key Truy Cập</label>
-                <div class="input-wrap">
-                    <input type="password" id="keyInput" class="key-input" maxlength="8" placeholder="••••••••" autocomplete="off">
-                    <button type="button" class="toggle-pw" onclick="toggleKeyVisibility(this)">
-                        <i class="fas fa-eye"></i>
-                    </button>
-                </div>
+    <!-- ═══════════════════════════════════
+         BƯỚC 1: Nhập Key
+    ═══════════════════════════════════ -->
+    <div id="step1">
+        <h1>Nhập Key Truy Cập</h1>
+        <p class="subtitle">Nhập key do Admin cấp để tiếp tục</p>
+
+        <div class="form-group">
+            <label><i class="fas fa-key" style="margin-right:5px;color:#e50914"></i>Key Truy Cập</label>
+            <div class="input-wrap">
+                <input type="password" id="keyInput" class="key-field" maxlength="8"
+                       placeholder="••••••••" autocomplete="off">
+                <button type="button" class="toggle-pw" onclick="toggleVis()">
+                    <i class="fas fa-eye" id="eyeIcon"></i>
+                </button>
             </div>
-
-            <!-- Email -->
-            <div class="form-group">
-                <label><i class="far fa-envelope" style="margin-right:5px;color:#e50914"></i>Netflix Account Email</label>
-                <div class="input-wrap">
-                    <i class="fas fa-at left"></i>
-                    <input type="email" id="emailInput" placeholder="your@email.com" autocomplete="email">
-                </div>
-            </div>
-
-            <button class="btn" id="submitBtn" onclick="startSignInTask()">
-                <i class="fas fa-sign-in-alt"></i> Lấy Mã Đăng Nhập
-            </button>
         </div>
+
+        <button class="btn" id="keyBtn" onclick="submitKey()">
+            <i class="fas fa-arrow-right"></i> Tiếp Tục
+        </button>
+    </div>
+
+    <!-- ═══════════════════════════════════
+         BƯỚC 2: Nhập Email (sau khi key ok)
+    ═══════════════════════════════════ -->
+    <div id="step2" style="display:none">
+        <h1>Lấy Mã Đăng Nhập</h1>
+        <p class="subtitle">Key đã được xác minh. Nhập email Netflix của bạn.</p>
+
+        <!-- Badge key đã đăng nhập -->
+        <div class="key-badge" id="keyBadge">
+            <i class="fas fa-check-circle"></i>
+            <span>Key hợp lệ</span>
+            <span class="key-val" id="keyDisplay"></span>
+        </div>
+
+        <div class="form-group">
+            <label><i class="far fa-envelope" style="margin-right:5px;color:#e50914"></i>Netflix Account Email</label>
+            <div class="input-wrap">
+                <i class="fas fa-at left"></i>
+                <input type="email" id="emailInput" placeholder="your@email.com" autocomplete="email"
+                       style="padding-right:16px">
+            </div>
+        </div>
+
+        <button class="btn" id="submitBtn" onclick="startSignInTask()">
+            <i class="fas fa-sign-in-alt"></i> Lấy Mã Đăng Nhập
+        </button>
 
         <!-- Loading -->
         <div class="loading-box" id="loadingBox">
@@ -261,156 +230,199 @@
         </div>
     </div>
 
-    <script>
-        let pollInterval = null;
+    <!-- ═══════════════════════════════════
+         KEY HẾT HẠN (từ URL)
+    ═══════════════════════════════════ -->
+    <div id="stepLocked" style="display:none">
+        <div class="locked-screen">
+            <div class="ban-wrap"><i class="fas fa-ban"></i></div>
+            <h2>Truy cập bị từ chối</h2>
+            <p id="lockedMsg">Key không tồn tại hoặc đã hết hạn, vui lòng nhắn tin cho admin.</p>
+        </div>
+    </div>
 
-        // ── Đọc key từ URL, kiểm tra hợp lệ ngay khi load ──
-        window.addEventListener('DOMContentLoaded', async function () {
-            const params = new URLSearchParams(window.location.search);
-            const keyFromUrl = params.get('key');
-            if (!keyFromUrl) return;
+</div><!-- /.card -->
 
-            // Điền key ẩn, ẩn ô nhập key
-            document.getElementById('keyInput').value = keyFromUrl;
-            document.getElementById('keySection').style.display = 'none';
+<script>
+let validKey = '';
+let pollInterval = null;
 
-            const badge = document.getElementById('keyStatusBadge');
-            badge.className = 'key-status checking';
-            badge.style.display = 'flex';
-            badge.innerHTML = '<i class="fas fa-spinner spin"></i> Đang xác minh key...';
-            document.getElementById('pageSubtitle').textContent = 'Nhập email Netflix của bạn để tiếp tục';
+/* ── Xử lý URL ?key=... ── */
+window.addEventListener('DOMContentLoaded', async function () {
+    const params = new URLSearchParams(window.location.search);
+    const keyFromUrl = params.get('key');
+    if (!keyFromUrl) return; // Không có key → hiện bước 1 bình thường
 
-            try {
-                const res = await fetch(`/tools/signin/check-key?key=${encodeURIComponent(keyFromUrl)}`);
-                const data = await res.json();
+    // Có key trong URL → kiểm tra ngay
+    try {
+        const res = await fetch(`/tools/signin/check-key?key=${encodeURIComponent(keyFromUrl)}`);
+        const data = await res.json();
+        if (data.valid) {
+            enterStep2(keyFromUrl, data.days_left);
+        } else {
+            showLocked(data.message);
+        }
+    } catch (e) {
+        showLocked('Không thể kiểm tra key. Vui lòng tải lại trang.');
+    }
+});
 
-                if (data.valid) {
-                    badge.className = 'key-status valid';
-                    badge.innerHTML = `<i class="fas fa-check-circle"></i> Key hợp lệ – còn ${data.days_left} ngày`;
-                    document.getElementById('emailInput').focus();
-                } else {
-                    lockForm(data.message);
-                }
-            } catch (err) {
-                badge.className = 'key-status checking';
-                badge.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Không thể kiểm tra key. Vui lòng tải lại trang.';
-            }
+/* ── Bước 1: Người dùng tự nhập key ── */
+async function submitKey() {
+    const key = document.getElementById('keyInput').value.trim();
+    if (!key) { shakeInput('keyInput'); return; }
+
+    const btn = document.getElementById('keyBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner spin"></i> Đang kiểm tra...';
+
+    try {
+        const res = await fetch(`/tools/signin/check-key?key=${encodeURIComponent(key)}`);
+        const data = await res.json();
+        if (data.valid) {
+            enterStep2(key, data.days_left);
+        } else {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-arrow-right"></i> Tiếp Tục';
+            shakeInput('keyInput');
+            showKeyError(data.message);
+        }
+    } catch (e) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-arrow-right"></i> Tiếp Tục';
+        showKeyError('Lỗi kết nối. Vui lòng thử lại.');
+    }
+}
+
+function enterStep2(key, daysLeft) {
+    validKey = key;
+    document.getElementById('step1').style.display = 'none';
+    document.getElementById('step2').style.display = 'block';
+    // Hiện key (che bớt giữa: chỉ hiện 2 ký tự đầu & cuối)
+    const masked = key.slice(0,2) + '••••' + key.slice(-2);
+    document.getElementById('keyDisplay').textContent = masked;
+    document.getElementById('emailInput').focus();
+    // Cập nhật URL không reload trang
+    history.replaceState(null, '', `/tools/signin?key=${encodeURIComponent(key)}`);
+}
+
+function showLocked(msg) {
+    document.getElementById('step1').style.display = 'none';
+    document.getElementById('stepLocked').style.display = 'block';
+    document.getElementById('lockedMsg').textContent = msg;
+}
+
+function showKeyError(msg) {
+    // Xóa error cũ nếu có
+    const old = document.getElementById('keyError');
+    if (old) old.remove();
+    const div = document.createElement('div');
+    div.id = 'keyError';
+    div.style.cssText = 'color:#f87171;font-size:12px;margin-top:8px;text-align:center;';
+    div.textContent = msg;
+    document.getElementById('step1').appendChild(div);
+    setTimeout(() => div.remove(), 4000);
+}
+
+function shakeInput(id) {
+    const el = document.getElementById(id);
+    el.classList.add('shake');
+    el.addEventListener('animationend', () => el.classList.remove('shake'), { once: true });
+    el.focus();
+}
+
+/* ── Bước 2: Gọi bot ── */
+async function startSignInTask() {
+    const email = document.getElementById('emailInput').value.trim();
+    if (!email) { shakeInput('emailInput'); return; }
+
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner spin"></i> Đang xử lý...';
+    document.getElementById('loadingBox').style.display = 'block';
+    document.getElementById('resultBox').style.display = 'none';
+
+    try {
+        const res = await fetch('/tools/signin/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: validKey, email })
         });
-
-        function lockForm(message) {
-            document.getElementById('mainForm').style.display = 'none';
-            document.getElementById('pageSubtitle').textContent = '';
-
-            const badge = document.getElementById('keyStatusBadge');
-            badge.className = 'key-status invalid';
-            badge.style.display = 'flex';
-            badge.innerHTML = `
-                <div class="ban-icon"><i class="fas fa-ban"></i></div>
-                <div>
-                    <div class="err-title">Truy cập bị từ chối</div>
-                    <div class="err-msg">${message}</div>
-                </div>
-            `;
+        const data = await res.json();
+        if (data.success) {
+            pollForResult(data.task_id);
+        } else {
+            document.getElementById('loadingBox').style.display = 'none';
+            showResult(data.message, 'error');
+            resetBtn();
         }
+    } catch (err) {
+        document.getElementById('loadingBox').style.display = 'none';
+        showResult('Lỗi kết nối: ' + err.message, 'error');
+        resetBtn();
+    }
+}
 
-        function toggleKeyVisibility(btn) {
-            const input = document.getElementById('keyInput');
-            const icon = btn.querySelector('i');
-            if (input.type === 'password') {
-                input.type = 'text';
-                icon.className = 'fas fa-eye-slash';
-            } else {
-                input.type = 'password';
-                icon.className = 'fas fa-eye';
-            }
-        }
-
-        async function startSignInTask() {
-            const key = document.getElementById('keyInput').value.trim();
-            const email = document.getElementById('emailInput').value.trim();
-
-            if (!key || !email) {
-                alert('Vui lòng nhập đầy đủ Key và Email!');
-                return;
-            }
-
-            const btn = document.getElementById('submitBtn');
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner spin"></i> Đang xác minh...';
-            document.getElementById('loadingBox').style.display = 'block';
-            document.getElementById('resultBox').style.display = 'none';
-
-            try {
-                const res = await fetch('/tools/signin/start', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ key, email })
-                });
-                const data = await res.json();
-
-                if (data.success) {
-                    btn.innerHTML = '<i class="fas fa-spinner spin"></i> Đang xử lý...';
-                    pollForResult(data.task_id);
-                } else {
-                    document.getElementById('loadingBox').style.display = 'none';
-                    showResult(data.message, 'error');
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Lấy Mã Đăng Nhập';
-                }
-            } catch (err) {
+function pollForResult(taskId) {
+    let attempts = 0;
+    pollInterval = setInterval(async () => {
+        attempts++;
+        try {
+            const res = await fetch(`/tools/signin/status/${taskId}`);
+            const data = await res.json();
+            if (data.status === 'done') {
+                clearInterval(pollInterval);
                 document.getElementById('loadingBox').style.display = 'none';
-                showResult('Lỗi kết nối máy chủ: ' + err.message, 'error');
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Lấy Mã Đăng Nhập';
+                const type = data.result && data.result.includes('⚠️') ? 'warning' : 'success';
+                showResult(data.result, type);
+                resetBtn();
+            } else if (data.status === 'not_found' || attempts >= 50) {
+                clearInterval(pollInterval);
+                document.getElementById('loadingBox').style.display = 'none';
+                showResult('Hết thời gian chờ. Vui lòng thử lại.', 'error');
+                resetBtn();
             }
+        } catch (err) {
+            clearInterval(pollInterval);
+            document.getElementById('loadingBox').style.display = 'none';
+            showResult('Lỗi: ' + err.message, 'error');
+            resetBtn();
         }
+    }, 2000);
+}
 
-        function pollForResult(taskId) {
-            let attempts = 0;
-            pollInterval = setInterval(async () => {
-                attempts++;
-                try {
-                    const res = await fetch(`/tools/signin/status/${taskId}`);
-                    const data = await res.json();
-                    if (data.status === 'done') {
-                        clearInterval(pollInterval);
-                        document.getElementById('loadingBox').style.display = 'none';
-                        showResult(data.result, data.result && data.result.includes('⚠️') ? 'warning' : 'success');
-                        const btn = document.getElementById('submitBtn');
-                        btn.disabled = false;
-                        btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Lấy Mã Đăng Nhập';
-                    } else if (data.status === 'not_found' || attempts >= 50) {
-                        clearInterval(pollInterval);
-                        document.getElementById('loadingBox').style.display = 'none';
-                        showResult('Hết thời gian chờ. Vui lòng thử lại.', 'error');
-                        const btn = document.getElementById('submitBtn');
-                        btn.disabled = false;
-                        btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Lấy Mã Đăng Nhập';
-                    }
-                } catch (err) {
-                    clearInterval(pollInterval);
-                    document.getElementById('loadingBox').style.display = 'none';
-                    showResult('Lỗi: ' + err.message, 'error');
-                }
-            }, 2000);
-        }
+function showResult(text, type = 'success') {
+    const box = document.getElementById('resultBox');
+    const el  = document.getElementById('resultText');
+    box.style.display = 'block';
+    el.className = `result-value ${type}`;
+    el.textContent = text || 'Không có kết quả.';
+}
 
-        function showResult(text, type = 'success') {
-            const box = document.getElementById('resultBox');
-            const el = document.getElementById('resultText');
-            box.style.display = 'block';
-            el.className = `result-value ${type}`;
-            el.textContent = text || 'Không có kết quả.';
-        }
+function resetBtn() {
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Lấy Mã Đăng Nhập';
+}
 
-        function copyResult() {
-            const text = document.getElementById('resultText').textContent;
-            navigator.clipboard.writeText(text).then(() => alert('Đã copy!'));
-        }
+function copyResult() {
+    navigator.clipboard.writeText(document.getElementById('resultText').textContent)
+        .then(() => alert('Đã copy!'));
+}
 
-        document.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') startSignInTask();
-        });
-    </script>
+function toggleVis() {
+    const inp  = document.getElementById('keyInput');
+    const icon = document.getElementById('eyeIcon');
+    if (inp.type === 'password') { inp.type = 'text';     icon.className = 'fas fa-eye-slash'; }
+    else                          { inp.type = 'password'; icon.className = 'fas fa-eye'; }
+}
+
+/* Enter để submit */
+document.addEventListener('keypress', e => {
+    if (e.key !== 'Enter') return;
+    if (document.getElementById('step1').style.display !== 'none') submitKey();
+    else startSignInTask();
+});
+</script>
 </body>
 </html>
