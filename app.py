@@ -1643,6 +1643,17 @@ def signin_status(task_id):
         return jsonify({'status': 'not_found'})
     return jsonify({'status': task['status'], 'result': task.get('result')})
 
+@app.route('/tools/signin/check-key', methods=['GET'])
+def signin_check_key():
+    """Ki\u1ec3m tra key c\u00f3 h\u1ee3p l\u1ec7 kh\u00f4ng \u2013 d\u00f9ng \u0111\u1ec3 frontend ki\u1ec3m tra ngay khi t\u1ea3i trang."""
+    key_input = (request.args.get('key') or '').strip()
+    if not key_input:
+        return jsonify({'valid': False, 'message': 'Thi\u1ebfu key.'})
+    tool_key = ToolKey.query.filter_by(key=key_input).first()
+    if not tool_key or not tool_key.is_valid:
+        return jsonify({'valid': False, 'message': 'Key kh\u00f4ng t\u1ed3n t\u1ea1i ho\u1eb7c \u0111\u00e3 h\u1ebft h\u1ea1n, vui l\u00f2ng nh\u1eafn tin cho admin.'})
+    return jsonify({'valid': True, 'days_left': tool_key.days_left})
+
 
 # --- Qu\u1ea3n l\u00fd Key (Admin only) ---
 import random as _random

@@ -80,20 +80,59 @@
     <script>
         let pollInterval = null;
 
-        // ─── Đọc key từ URL param khi tải trang ───
-        window.addEventListener('DOMContentLoaded', function () {
+        // ─── Đọc key từ URL param & kiểm tra hết hạn ngay khi tải trang ───
+        window.addEventListener('DOMContentLoaded', async function () {
             const params = new URLSearchParams(window.location.search);
             const keyFromUrl = params.get('key');
-            if (keyFromUrl) {
-                document.getElementById('keyInput').value = keyFromUrl;
-                // Ẩn ô nhập key, hiện badge
-                document.getElementById('keySection').classList.add('hidden');
-                document.getElementById('keyPrefilledBadge').classList.remove('hidden');
-                document.getElementById('keyPrefilledBadge').classList.add('flex');
-                // Focus thẳng vào email
-                document.getElementById('emailInput').focus();
+            if (!keyFromUrl) return;
+
+            // Điền key vào input ẩn
+            document.getElementById('keyInput').value = keyFromUrl;
+
+            // Ẩn ô nhập key, hiện badge đang kiểm tra
+            document.getElementById('keySection').classList.add('hidden');
+            const badge = document.getElementById('keyPrefilledBadge');
+            badge.classList.remove('hidden');
+            badge.classList.add('flex');
+            badge.innerHTML = '<i class="fas fa-spinner spin text-yellow-400 text-sm"></i><span class="text-xs text-yellow-300 font-semibold">Đang xác minh key...</span>';
+
+            try {
+                const res = await fetch(`/tools/signin/check-key?key=${encodeURIComponent(keyFromUrl)}`);
+                const data = await res.json();
+
+                if (data.valid) {
+                    // Key hợp lệ → hiện badge xanh, focus email
+                    badge.className = 'flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-2.5';
+                    badge.innerHTML = `<i class="fas fa-check-circle text-green-400 text-sm"></i><span class="text-xs text-green-300 font-semibold">Key hợp lệ – Còn ${data.days_left} ngày. Chỉ cần nhập email!</span>`;
+                    document.getElementById('emailInput').focus();
+                } else {
+                    // Key hết hạn / không tồn tại → khóa form, hiện lỗi đỏ
+                    lockForm(data.message);
+                }
+            } catch (err) {
+                badge.className = 'flex items-center gap-2 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-2.5';
+                badge.innerHTML = '<i class="fas fa-exclamation-triangle text-red-400 text-sm"></i><span class="text-xs text-red-300 font-semibold">Không thể kiểm tra key. Vui lòng thử lại.</span>';
             }
         });
+
+        function lockForm(message) {
+            // Ẩn form
+            document.querySelector('.space-y-4').classList.add('hidden');
+
+            // Hiện thẻ lỗi lớn
+            const badge = document.getElementById('keyPrefilledBadge');
+            badge.className = 'flex flex-col items-center gap-3 bg-red-500/10 border border-red-500/30 rounded-2xl px-6 py-8 text-center mt-2';
+            badge.innerHTML = `
+                <div class="w-14 h-14 bg-red-500/15 rounded-full flex items-center justify-center text-3xl text-red-400 border border-red-500/20">
+                    <i class="fas fa-ban"></i>
+                </div>
+                <div>
+                    <p class="text-sm font-bold text-red-300 mb-1">Truy cập bị từ chối</p>
+                    <p class="text-xs text-red-400/80 leading-relaxed">${message}</p>
+                </div>
+            `;
+            badge.classList.remove('hidden');
+        }
 
         async function startSignInTask() {
             const key = document.getElementById('keyInput').value.trim();
