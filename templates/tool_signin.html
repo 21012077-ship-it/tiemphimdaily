@@ -201,6 +201,11 @@
             <i class="fas fa-check-circle"></i>
             <span>Key hợp lệ</span>
             <span class="key-val" id="keyDisplay"></span>
+            <button onclick="logout()" title="Đăng xuất"
+                    style="margin-left:auto;background:none;border:none;cursor:pointer;color:#6b7280;font-size:13px;padding:2px 4px;transition:color .2s;display:flex;align-items:center;gap:4px;"
+                    onmouseover="this.style.color='#f87171'" onmouseout="this.style.color='#6b7280'">
+                <i class="fas fa-sign-out-alt"></i>
+            </button>
         </div>
 
         <div class="form-group">
@@ -408,6 +413,24 @@ function resetBtn() {
 function copyResult() {
     navigator.clipboard.writeText(document.getElementById('resultText').textContent)
         .then(() => alert('Đã copy!'));
+}
+
+function logout() {
+    // Dừng poll nếu đang chạy
+    if (pollInterval) clearInterval(pollInterval);
+    validKey = '';
+    // Xoá key khỏi URL (không reload)
+    history.replaceState(null, '', '/tools/signin');
+    // Reset bước 1
+    document.getElementById('keyInput').value = '';
+    document.getElementById('emailInput').value = '';
+    document.getElementById('step2').style.display = 'none';
+    document.getElementById('loadingBox').style.display = 'none';
+    document.getElementById('resultBox').style.display = 'none';
+    document.getElementById('step1').style.display = 'block';
+    document.getElementById('keyBtn').disabled = false;
+    document.getElementById('keyBtn').innerHTML = '<i class="fas fa-arrow-right"></i> Ti\u1ebfp T\u1ee5c';
+    document.getElementById('keyInput').focus();
 }
 
 function toggleVis() {
