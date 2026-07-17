@@ -97,9 +97,14 @@
                             {{ 'Khoá' if k.is_active else 'Mở' }}
                         </button>
                         <!-- Copy key -->
-                        <button onclick="navigator.clipboard.writeText('{{ k.key }}').then(()=>alert('Đã copy key!'))"
-                                class="text-xs px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 font-semibold transition-all">
-                            <i class="far fa-copy"></i>
+                        <button onclick="copyKey('{{ k.key }}')"
+                                class="text-xs px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 font-semibold transition-all" title="Copy key">
+                            <i class="fas fa-hashtag"></i> Key
+                        </button>
+                        <!-- Copy link có sẵn key -->
+                        <button onclick="copySigninLink('{{ k.key }}')"
+                                class="text-xs px-3 py-1.5 rounded-lg bg-yellow-100 text-yellow-700 hover:bg-yellow-200 font-semibold transition-all" title="Copy link gửi khách">
+                            <i class="fas fa-link"></i> Link
                         </button>
                         <!-- Delete -->
                         <form action="/admin/keys/delete/{{ k.id }}" method="POST" onsubmit="return confirm('Xóa key này?')">
@@ -122,6 +127,20 @@
             if (data.success) {
                 window.location.reload();
             }
+        }
+
+        function copyKey(key) {
+            navigator.clipboard.writeText(key).then(() => {
+                alert('Đã copy key: ' + key);
+            });
+        }
+
+        function copySigninLink(key) {
+            const base = window.location.origin;
+            const link = `${base}/tools/signin?key=${key}`;
+            navigator.clipboard.writeText(link).then(() => {
+                alert('Đã copy link gửi khách:\n' + link);
+            });
         }
     </script>
 </body>

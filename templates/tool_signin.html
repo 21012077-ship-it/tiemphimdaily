@@ -26,18 +26,24 @@
                 <i class="fas fa-sign-in-alt"></i>
             </div>
             <h1 class="text-xl font-bold text-white">Sign In Code</h1>
-            <p class="text-xs text-gray-400 mt-1">Nhập key truy cập và email Netflix để lấy mã đăng nhập.</p>
+            <p id="pageDesc" class="text-xs text-gray-400 mt-1">Nhập key truy cập và email Netflix để lấy mã đăng nhập.</p>
         </div>
 
         <!-- Form -->
         <div class="space-y-4">
-            <!-- Key truy cập -->
-            <div>
+            <!-- Key truy cập - ẩn đi nếu key có trong URL -->
+            <div id="keySection">
                 <label class="block text-xs font-bold text-gray-400 mb-1.5 uppercase tracking-wider">
                     <i class="fas fa-key mr-1 text-yellow-500"></i> Key Truy Cập
                 </label>
                 <input type="text" id="keyInput" maxlength="8" placeholder="Nhập key 8 số do Admin cấp..."
                        class="w-full bg-black/40 border border-gray-700 rounded-xl px-4 py-3 text-sm text-white focus:ring-2 focus:ring-yellow-500 outline-none transition-all placeholder-gray-600 font-mono tracking-widest text-center text-lg font-bold">
+            </div>
+
+            <!-- Thông báo key đã được nhúng trong link -->
+            <div id="keyPrefilledBadge" class="hidden items-center gap-2 bg-yellow-500/10 border border-yellow-500/20 rounded-xl px-4 py-2.5">
+                <i class="fas fa-check-circle text-yellow-400 text-sm"></i>
+                <span class="text-xs text-yellow-300 font-semibold">Key đã được xác thực sẵn – Chỉ cần nhập email!</span>
             </div>
 
             <!-- Email -->
@@ -73,6 +79,21 @@
 
     <script>
         let pollInterval = null;
+
+        // ─── Đọc key từ URL param khi tải trang ───
+        window.addEventListener('DOMContentLoaded', function () {
+            const params = new URLSearchParams(window.location.search);
+            const keyFromUrl = params.get('key');
+            if (keyFromUrl) {
+                document.getElementById('keyInput').value = keyFromUrl;
+                // Ẩn ô nhập key, hiện badge
+                document.getElementById('keySection').classList.add('hidden');
+                document.getElementById('keyPrefilledBadge').classList.remove('hidden');
+                document.getElementById('keyPrefilledBadge').classList.add('flex');
+                // Focus thẳng vào email
+                document.getElementById('emailInput').focus();
+            }
+        });
 
         async function startSignInTask() {
             const key = document.getElementById('keyInput').value.trim();
