@@ -240,10 +240,25 @@
             <div class="ban-wrap"><i class="fas fa-ban"></i></div>
             <h2>Truy cập bị từ chối</h2>
             <p id="lockedMsg">Key không tồn tại hoặc đã hết hạn, vui lòng nhắn tin cho admin.</p>
-        </div>
+        </div><!-- /stepLocked -->
     </div>
 
 </div><!-- /.card -->
+
+<!-- Nút quay về Household -->
+<div style="text-align:center;margin-top:20px;">
+    <a href="/tools/household"
+       style="display:inline-flex;align-items:center;gap:8px;
+              background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);
+              border-radius:12px;padding:10px 20px;
+              color:#9ca3af;font-size:13px;font-weight:600;text-decoration:none;
+              transition:all .2s;"
+       onmouseover="this.style.background='rgba(255,255,255,0.1)';this.style.color='#fff';"
+       onmouseout="this.style.background='rgba(255,255,255,0.05)';this.style.color='#9ca3af';">
+        <i class="fas fa-home" style="color:#f59e0b;font-size:14px;"></i>
+        Cập Nhật Hộ Gia Đình
+    </a>
+</div>
 
 <script>
 let validKey = '';
