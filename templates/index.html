@@ -193,88 +193,337 @@
             </div>
 
             <div id="view-premium" class="hidden">
-                {% if current_user.role == 'admin' %}
-                <div class="mb-8 flex flex-col md:flex-row justify-between items-center bg-white p-5 rounded-xl shadow-sm border border-gray-100 gap-4">
-                    <form action="/add_premium_account" method="POST" class="flex gap-3 flex-grow w-full md:w-auto max-w-xl">
-                        <input type="email" name="email" placeholder="Nhập Email Master mới..." required class="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 text-sm">
-                        <button type="submit" class="bg-gray-900 text-white px-6 py-2.5 rounded-lg text-sm font-bold shadow-lg flex items-center gap-2 whitespace-nowrap">
-                            <i class="fas fa-plus-circle"></i> Tạo Nhóm
-                        </button>
-                    </form>
-                </div>
-                {% else %}
-                <div class="mb-6 bg-blue-50 border border-blue-100 text-blue-800 rounded-xl p-4 text-sm font-medium">CTV được thêm hồ sơ vào các nhóm còn trống. Mỗi hồ sơ sẽ lưu tên CTV đã thêm.</div>
-                {% endif %}
 
-                <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {% for acc in premiums %}
-                    <div class="group bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col h-full ring-1 ring-gray-100 hover:ring-gray-300">
-                        <div class="bg-gray-900 p-4 flex justify-between items-center relative overflow-hidden">
-                            <div class="absolute top-0 right-0 p-4 opacity-10 pointer-events-none"><i class="fab fa-netflix text-6xl text-white"></i></div>
-                            <div class="flex items-center gap-3 relative z-10 w-4/5">
-                                <div class="w-9 h-9 rounded bg-red-600 flex items-center justify-center text-white font-bold text-xs shadow-inner shrink-0 border border-red-500">N</div>
-                                <div class="flex flex-col overflow-hidden">
-                                    <div class="flex items-center gap-2">
-                                        <span class="text-white font-bold text-sm truncate">{{ acc.email }}</span>
-                                        {% if current_user.role == 'admin' %}
-                                        <button onclick="openEditAccModal('{{ acc.id }}', '{{ acc.email }}')" class="text-gray-400 hover:text-white transition-colors cursor-pointer z-20 relative" title="Sửa email nhóm">
-                                            <i class="fas fa-pen text-xs"></i>
-                                        </button>
-                                        {% endif %}
-                                    </div>
-                                    <div class="flex items-center gap-1 mt-1">
-                                        {% for i in range(5) %}
-                                        <div class="h-1 w-5 rounded-full {{ 'bg-green-500' if i < acc.slots|length else 'bg-gray-700' }}"></div>
-                                        {% endfor %}
-                                        <span class="text-[10px] text-gray-400 ml-2 font-medium">{{ acc.active_count }}/5 Slot Active</span>
-                                    </div>
-                                </div>
-                            </div>
-                            {% if current_user.role == 'admin' %}
-                            <a href="/delete_premium_acc/{{ acc.id }}" onclick="return confirm('Xoá toàn bộ nhóm?')" class="text-gray-500 hover:text-red-500 p-2 relative z-10">
-                                <i class="fas fa-trash-alt"></i>
-                            </a>
-                            {% endif %}
+                {# ── Tính toán số liệu thống kê ── #}
+                {% set total_acc = premiums|length %}
+                {% set total_slots_used = namespace(v=0) %}
+                {% set total_slots_max = namespace(v=0) %}
+                {% set acc_with_empty = namespace(v=0) %}
+                {% set slots_expiring = namespace(v=0) %}
+                {% for acc in premiums %}
+                    {% set total_slots_used.v = total_slots_used.v + acc.active_count %}
+                    {% set total_slots_max.v = total_slots_max.v + 5 %}
+                    {% if acc.active_count < 5 %}{% set acc_with_empty.v = acc_with_empty.v + 1 %}{% endif %}
+                    {% for slot in acc.slots %}
+                        {% if slot.active and slot.days_left <= 7 %}{% set slots_expiring.v = slots_expiring.v + 1 %}{% endif %}
+                    {% endfor %}
+                {% endfor %}
+
+                {# ── Thanh thống kê ── #}
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+                    <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex items-center gap-3">
+                        <div class="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
+                            <i class="fas fa-layer-group text-indigo-500"></i>
                         </div>
-
-                        <div class="p-3 bg-gray-50 flex-grow flex flex-col gap-2.5">
-                            {% for slot in acc.slots %}
-                            {% if slot.active %}
-                            <div class="flex items-center justify-between bg-white p-3 rounded-xl border border-gray-100 shadow-sm transition-all relative cursor-pointer hover:border-blue-300 hover:shadow-md" onclick="openEditModal('{{ slot.id }}', '{{ slot.customer_name }}', '{{ slot.profile_name }}', '{{ slot.source }}', '{{ slot.expiry_date }}', '{{ slot.contact_link }}')">
-                                <div class="absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-white {{ 'bg-green-500' if slot.payment_status == 'Đã thu tiền' else ('bg-blue-500' if slot.payment_status == 'Đã gửi tin nhắn' else 'bg-gray-300') }}"></div>
-                                <div class="flex items-center gap-3 overflow-hidden w-full pointer-events-none">
-                                    <div class="w-10 h-10 rounded-lg bg-cover bg-center shadow-inner relative shrink-0 border border-gray-100" style="background-image: url('https://upload.wikimedia.org/wikipedia/commons/0/0b/Netflix-avatar.png');">
-                                        <span class="absolute -bottom-1.5 -right-1.5 bg-gray-900 text-white text-[9px] px-1.5 py-0.5 rounded border border-white font-bold shadow-sm max-w-[50px] truncate">{{ slot.profile_name }}</span>
-                                    </div>
-                                    <div class="overflow-hidden flex-grow min-w-0 pr-2">
-                                        <div class="font-bold text-gray-800 text-sm truncate">{{ slot.customer_name }}</div>
-                                        <div class="text-[10px] text-gray-400 mt-0.5">CTV thêm: {{ slot.created_by_name or '---' }}</div>
-                                        <div class="flex items-center gap-2 mt-0.5">
-                                            <span class="text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded truncate max-w-[80px]">{{ slot.source }}</span>
-                                            <span class="text-[10px] font-bold {{ 'text-red-600 bg-red-50' if slot.days_left <= 3 else 'text-green-600 bg-green-50' }} px-1.5 py-0.5 rounded border border-green-100 whitespace-nowrap">{{ slot.days_left }} ngày</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                {% if current_user.role == 'admin' or slot.created_by_user_id == current_user.id %}
-                                <a href="/stop_service/premium/{{ slot.id }}" onclick="event.stopPropagation(); return confirm('Dừng dịch vụ khách này?')" class="text-gray-300 hover:text-red-500 px-2 shrink-0 z-10">
-                                    <i class="fas fa-times"></i>
-                                </a>
-                                {% endif %}
-                            </div>
-                            {% endif %}
-                            {% endfor %}
-
-                            {% for i in range(5 - acc.active_count) %}
-                            <button onclick="openAddModal('{{ acc.id }}', '{{ acc.email }}')" class="flex flex-col items-center justify-center gap-1 bg-white border-2 border-dashed border-gray-200 p-2 rounded-xl text-gray-400 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-all h-[68px] group/btn">
-                                <i class="fas fa-plus-circle text-lg group-hover/btn:scale-110 transition-transform"></i>
-                                <span class="text-[11px] font-semibold">Thêm Slot Trống</span>
-                            </button>
-                            {% endfor %}
+                        <div>
+                            <div class="text-2xl font-black text-gray-900">{{ total_acc }}</div>
+                            <div class="text-xs text-gray-400 font-medium">Tài khoản</div>
                         </div>
                     </div>
-                    {% endfor %}
+                    <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex items-center gap-3">
+                        <div class="w-9 h-9 rounded-lg bg-green-50 flex items-center justify-center shrink-0">
+                            <i class="fas fa-users text-green-500"></i>
+                        </div>
+                        <div>
+                            <div class="text-2xl font-black text-gray-900">{{ total_slots_used.v }}<span class="text-sm text-gray-400 font-normal">/{{ total_slots_max.v }}</span></div>
+                            <div class="text-xs text-gray-400 font-medium">Slot đang dùng</div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex items-center gap-3">
+                        <div class="w-9 h-9 rounded-lg bg-yellow-50 flex items-center justify-center shrink-0">
+                            <i class="fas fa-door-open text-yellow-500"></i>
+                        </div>
+                        <div>
+                            <div class="text-2xl font-black text-gray-900">{{ acc_with_empty.v }}</div>
+                            <div class="text-xs text-gray-400 font-medium">Tài khoản còn trống</div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex items-center gap-3">
+                        <div class="w-9 h-9 rounded-lg bg-red-50 flex items-center justify-center shrink-0">
+                            <i class="fas fa-exclamation-triangle text-red-500"></i>
+                        </div>
+                        <div>
+                            <div class="text-2xl font-black text-gray-900">{{ slots_expiring.v }}</div>
+                            <div class="text-xs text-gray-400 font-medium">Slot sắp/đã hết hạn</div>
+                        </div>
+                    </div>
                 </div>
+
+                {# ── Toolbar: thêm tài khoản + tìm kiếm + lọc ── #}
+                <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-4">
+                    <div class="flex flex-col md:flex-row gap-3 items-start md:items-center">
+                        {% if current_user.role == 'admin' %}
+                        <form action="/add_premium_account" method="POST" class="flex gap-2 shrink-0">
+                            <input type="email" name="email" placeholder="Email tài khoản Netflix mới..." required
+                                   class="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-indigo-300">
+                            <button type="submit" class="bg-gray-900 hover:bg-black text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-1.5 whitespace-nowrap transition-colors">
+                                <i class="fas fa-plus"></i> Thêm
+                            </button>
+                        </form>
+                        <div class="h-6 border-l border-gray-200 hidden md:block"></div>
+                        {% endif %}
+                        <input id="premiumSearch" type="text" placeholder="🔍  Tìm email tài khoản hoặc tên khách..."
+                               oninput="filterPremium()"
+                               class="flex-grow bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300">
+                    </div>
+                    <div class="flex flex-wrap gap-2 mt-3" id="premiumFilters">
+                        <button onclick="setPremiumFilter('all')" data-filter="all" class="pf-btn pf-active px-3 py-1.5 rounded-lg text-xs font-bold border transition-all">Tất cả</button>
+                        <button onclick="setPremiumFilter('empty')" data-filter="empty" class="pf-btn px-3 py-1.5 rounded-lg text-xs font-bold border transition-all">⬜ Còn trống slot</button>
+                        <button onclick="setPremiumFilter('full')" data-filter="full" class="pf-btn px-3 py-1.5 rounded-lg text-xs font-bold border transition-all">✅ Đầy slot</button>
+                        <button onclick="setPremiumFilter('expiring')" data-filter="expiring" class="pf-btn px-3 py-1.5 rounded-lg text-xs font-bold border transition-all">🟠 Sắp hết hạn ≤7 ngày</button>
+                        <button onclick="setPremiumFilter('expired')" data-filter="expired" class="pf-btn px-3 py-1.5 rounded-lg text-xs font-bold border transition-all">🔴 Đã hết hạn</button>
+                    </div>
+                </div>
+
+                {# ── Bảng accordion ── #}
+                <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                    <table class="w-full text-sm border-collapse" id="premiumTable">
+                        <thead>
+                            <tr class="bg-gray-50 text-gray-500 text-xs uppercase font-bold tracking-wider border-b border-gray-200">
+                                <th class="p-3 pl-4 text-left w-8"></th>
+                                <th class="p-3 text-left">Email tài khoản</th>
+                                <th class="p-3 text-center">Slot dùng</th>
+                                <th class="p-3 text-center">Trống</th>
+                                <th class="p-3 text-center">Cảnh báo</th>
+                                {% if current_user.role == 'admin' %}
+                                <th class="p-3 text-center">Thao tác</th>
+                                {% endif %}
+                            </tr>
+                        </thead>
+                        <tbody id="premiumTbody">
+                        {% for acc in premiums %}
+                            {# Tính cảnh báo cho acc này #}
+                            {% set has_expired = namespace(v=false) %}
+                            {% set has_expiring = namespace(v=false) %}
+                            {% set expiring_count = namespace(v=0) %}
+                            {% for slot in acc.slots %}
+                                {% if slot.active %}
+                                    {% if slot.days_left < 0 %}{% set has_expired.v = true %}{% set expiring_count.v = expiring_count.v + 1 %}{% endif %}
+                                    {% if slot.days_left >= 0 and slot.days_left <= 7 %}{% set has_expiring.v = true %}{% set expiring_count.v = expiring_count.v + 1 %}{% endif %}
+                                {% endif %}
+                            {% endfor %}
+                            {% set empty_slots = 5 - acc.active_count %}
+
+                            {# Màu nền hàng #}
+                            {% if has_expired.v %}
+                                {% set row_bg = 'bg-red-50 hover:bg-red-100/60' %}
+                            {% elif has_expiring.v %}
+                                {% set row_bg = 'bg-orange-50 hover:bg-orange-100/60' %}
+                            {% else %}
+                                {% set row_bg = 'bg-white hover:bg-gray-50' %}
+                            {% endif %}
+
+                            {# Data attrs cho JS filter #}
+                            <tr class="premium-acc-row border-b border-gray-100 cursor-pointer transition-colors {{ row_bg }}"
+                                data-acc-id="{{ acc.id }}"
+                                data-email="{{ acc.email|lower }}"
+                                data-slots-used="{{ acc.active_count }}"
+                                data-empty="{{ empty_slots }}"
+                                data-expiring="{{ expiring_count.v }}"
+                                data-slot-names="{% for s in acc.slots %}{% if s.active %}{{ s.customer_name|lower }} {% endif %}{% endfor %}"
+                                onclick="toggleAccordion({{ acc.id }})">
+                                <td class="p-3 pl-4">
+                                    <i id="arrow-{{ acc.id }}" class="fas fa-chevron-right text-gray-400 text-xs transition-transform duration-200"></i>
+                                </td>
+                                <td class="p-3">
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-7 h-7 rounded bg-red-600 flex items-center justify-center text-white font-black text-xs shrink-0">N</div>
+                                        <span class="font-semibold text-gray-800 text-sm">{{ acc.email }}</span>
+                                    </div>
+                                </td>
+                                <td class="p-3 text-center">
+                                    <div class="flex items-center justify-center gap-1">
+                                        {% for i in range(5) %}
+                                        <div class="h-2 w-4 rounded-full {{ 'bg-green-500' if i < acc.active_count else 'bg-gray-200' }}"></div>
+                                        {% endfor %}
+                                        <span class="text-xs text-gray-500 ml-1 font-bold">{{ acc.active_count }}/5</span>
+                                    </div>
+                                </td>
+                                <td class="p-3 text-center">
+                                    {% if empty_slots > 0 %}
+                                    <span class="inline-flex items-center gap-1 bg-yellow-100 text-yellow-700 text-xs font-bold px-2 py-1 rounded-lg border border-yellow-200">
+                                        <i class="fas fa-plus-circle text-[10px]"></i> {{ empty_slots }} trống
+                                    </span>
+                                    {% else %}
+                                    <span class="inline-flex items-center gap-1 bg-green-100 text-green-700 text-xs font-bold px-2 py-1 rounded-lg border border-green-200">Đầy</span>
+                                    {% endif %}
+                                </td>
+                                <td class="p-3 text-center">
+                                    {% if has_expired.v %}
+                                    <span class="inline-flex items-center gap-1 bg-red-100 text-red-700 text-xs font-bold px-2 py-1 rounded-lg border border-red-200">
+                                        <i class="fas fa-circle text-[8px]"></i> {{ expiring_count.v }} hết hạn
+                                    </span>
+                                    {% elif has_expiring.v %}
+                                    <span class="inline-flex items-center gap-1 bg-orange-100 text-orange-700 text-xs font-bold px-2 py-1 rounded-lg border border-orange-200">
+                                        <i class="fas fa-circle text-[8px]"></i> {{ expiring_count.v }} sắp hết
+                                    </span>
+                                    {% else %}
+                                    <span class="text-green-500 text-xs font-bold">✓ OK</span>
+                                    {% endif %}
+                                </td>
+                                {% if current_user.role == 'admin' %}
+                                <td class="p-3 text-center" onclick="event.stopPropagation()">
+                                    <div class="flex items-center justify-center gap-2">
+                                        <button onclick="openEditAccModal('{{ acc.id }}', '{{ acc.email }}')"
+                                                class="text-gray-400 hover:text-blue-500 p-1 rounded transition-colors" title="Sửa email">
+                                            <i class="fas fa-pen text-xs"></i>
+                                        </button>
+                                        <a href="/delete_premium_acc/{{ acc.id }}" onclick="return confirm('Xoá toàn bộ tài khoản này?')"
+                                           class="text-gray-400 hover:text-red-500 p-1 rounded transition-colors" title="Xóa">
+                                            <i class="fas fa-trash-alt text-xs"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                                {% endif %}
+                            </tr>
+
+                            {# ── Accordion row: danh sách slot ── #}
+                            <tr id="accordion-{{ acc.id }}" class="hidden">
+                                <td colspan="{% if current_user.role == 'admin' %}6{% else %}5{% endif %}" class="p-0">
+                                    <div class="bg-gray-50/80 border-t border-gray-100 px-4 py-3">
+                                        <table class="w-full text-xs">
+                                            <thead>
+                                                <tr class="text-gray-400 font-bold uppercase tracking-wider border-b border-gray-200">
+                                                    <th class="pb-2 text-left pl-2">Hồ sơ</th>
+                                                    <th class="pb-2 text-left">Tên khách</th>
+                                                    <th class="pb-2 text-left">Nguồn</th>
+                                                    <th class="pb-2 text-center">Hết hạn</th>
+                                                    <th class="pb-2 text-center">Còn lại</th>
+                                                    <th class="pb-2 text-center">Thu tiền</th>
+                                                    <th class="pb-2 text-center">Thao tác</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="divide-y divide-gray-100">
+                                                {% for slot in acc.slots %}
+                                                {% if slot.active %}
+                                                <tr class="{% if slot.days_left < 0 %}bg-red-50{% elif slot.days_left <= 7 %}bg-orange-50{% endif %} hover:bg-blue-50/50 transition-colors">
+                                                    <td class="py-2.5 pl-2">
+                                                        <span class="bg-gray-800 text-white text-[10px] font-bold px-2 py-0.5 rounded">{{ slot.profile_name or '—' }}</span>
+                                                    </td>
+                                                    <td class="py-2.5">
+                                                        <button onclick="openEditModal('{{ slot.id }}', '{{ slot.customer_name }}', '{{ slot.profile_name }}', '{{ slot.source }}', '{{ slot.expiry_date }}', '{{ slot.contact_link }}')"
+                                                                class="font-semibold text-gray-800 hover:text-blue-600 text-left transition-colors">
+                                                            {{ slot.customer_name }}
+                                                        </button>
+                                                        <div class="text-gray-400 text-[10px] mt-0.5">{{ slot.created_by_name or '—' }}</div>
+                                                    </td>
+                                                    <td class="py-2.5">
+                                                        <span class="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">{{ slot.source }}</span>
+                                                    </td>
+                                                    <td class="py-2.5 text-center font-semibold {{ 'text-red-600' if slot.days_left < 0 else ('text-orange-600' if slot.days_left <= 7 else 'text-gray-600') }}">
+                                                        {{ slot.expiry_date.strftime('%d/%m/%Y') }}
+                                                    </td>
+                                                    <td class="py-2.5 text-center">
+                                                        <span class="font-bold px-2 py-0.5 rounded text-[11px] {% if slot.days_left < 0 %}bg-red-100 text-red-700{% elif slot.days_left <= 7 %}bg-orange-100 text-orange-700{% else %}bg-green-100 text-green-700{% endif %}">
+                                                            {% if slot.days_left < 0 %}HẾT HẠN{% else %}{{ slot.days_left }}d{% endif %}
+                                                        </span>
+                                                    </td>
+                                                    <td class="py-2.5 text-center">
+                                                        <select onchange="updateStatusAJAX('premium', {{ slot.id }}, this.value, this)"
+                                                                class="text-[11px] font-bold py-1 px-1.5 rounded border cursor-pointer outline-none transition-all {{ 'bg-green-50 text-green-700 border-green-200' if slot.payment_status == 'Đã thu tiền' else 'bg-gray-50 text-gray-600 border-gray-200' }}">
+                                                            <option value="Chưa thu" {{ 'selected' if slot.payment_status == 'Chưa thu' }}>Chưa thu</option>
+                                                            <option value="Đã gửi tin nhắn" {{ 'selected' if slot.payment_status == 'Đã gửi tin nhắn' }}>Đã nhắn</option>
+                                                            <option value="Đã thu tiền" {{ 'selected' if slot.payment_status == 'Đã thu tiền' }}>Đã thu</option>
+                                                        </select>
+                                                    </td>
+                                                    <td class="py-2.5 text-center">
+                                                        {% if current_user.role == 'admin' or slot.created_by_user_id == current_user.id %}
+                                                        <a href="/stop_service/premium/{{ slot.id }}" onclick="return confirm('Dừng dịch vụ khách này?')"
+                                                           class="text-gray-300 hover:text-red-500 px-1 transition-colors">
+                                                            <i class="fas fa-times"></i>
+                                                        </a>
+                                                        {% endif %}
+                                                    </td>
+                                                </tr>
+                                                {% endif %}
+                                                {% endfor %}
+
+                                                {# Slot trống: nút Thêm #}
+                                                {% for i in range(5 - acc.active_count) %}
+                                                <tr>
+                                                    <td colspan="7" class="py-2 pl-2">
+                                                        <button onclick="openAddModal('{{ acc.id }}', '{{ acc.email }}')"
+                                                                class="flex items-center gap-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded-lg border border-dashed border-gray-200 hover:border-blue-300 transition-all text-xs font-semibold w-full">
+                                                            <i class="fas fa-plus-circle"></i> Thêm khách vào slot trống
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                    <div id="premiumEmpty" class="hidden py-12 text-center text-gray-400">
+                        <i class="fas fa-search text-3xl mb-3 opacity-30"></i>
+                        <p class="text-sm">Không tìm thấy tài khoản nào phù hợp.</p>
+                    </div>
+                </div>
+
+                <style>
+                    .pf-btn { background:#f9fafb; color:#6b7280; border-color:#e5e7eb; }
+                    .pf-btn:hover { background:#f3f4f6; border-color:#d1d5db; }
+                    .pf-active { background:#1f2937 !important; color:#fff !important; border-color:#1f2937 !important; }
+                    .accordion-open .fa-chevron-right { transform: rotate(90deg); }
+                </style>
+
+                <script>
+                let currentPremiumFilter = 'all';
+
+                function toggleAccordion(accId) {
+                    const row = document.getElementById('accordion-' + accId);
+                    const arrow = document.getElementById('arrow-' + accId);
+                    const isOpen = !row.classList.contains('hidden');
+                    row.classList.toggle('hidden', isOpen);
+                    arrow.style.transform = isOpen ? '' : 'rotate(90deg)';
+                }
+
+                function setPremiumFilter(filter) {
+                    currentPremiumFilter = filter;
+                    document.querySelectorAll('.pf-btn').forEach(b => b.classList.remove('pf-active'));
+                    document.querySelector('[data-filter="' + filter + '"]').classList.add('pf-active');
+                    filterPremium();
+                }
+
+                function filterPremium() {
+                    const q = (document.getElementById('premiumSearch').value || '').toLowerCase();
+                    const rows = document.querySelectorAll('.premium-acc-row');
+                    let visible = 0;
+
+                    rows.forEach(row => {
+                        const email = row.dataset.email || '';
+                        const slotNames = row.dataset.slotNames || '';
+                        const empty = parseInt(row.dataset.empty || '0');
+                        const expiring = parseInt(row.dataset.expiring || '0');
+                        const slotsUsed = parseInt(row.dataset.slotsUsed || '0');
+                        const accId = row.dataset.accId;
+                        const accordion = document.getElementById('accordion-' + accId);
+
+                        // Text search
+                        const matchSearch = !q || email.includes(q) || slotNames.includes(q);
+
+                        // Filter pill
+                        let matchFilter = true;
+                        if (currentPremiumFilter === 'empty')    matchFilter = empty > 0;
+                        if (currentPremiumFilter === 'full')     matchFilter = empty === 0;
+                        if (currentPremiumFilter === 'expiring') matchFilter = expiring > 0;
+                        if (currentPremiumFilter === 'expired')  matchFilter = expiring > 0;
+
+                        const show = matchSearch && matchFilter;
+                        row.style.display = show ? '' : 'none';
+                        if (accordion) accordion.style.display = show ? accordion.style.display : 'none';
+                        if (show) visible++;
+                    });
+
+                    document.getElementById('premiumEmpty').classList.toggle('hidden', visible > 0);
+                }
+                </script>
+
             </div>
+
 
             <div id="view-standard" class="hidden">
                 <form action="/add_standard" method="POST" class="mb-8 bg-blue-50 p-6 rounded-2xl border border-blue-100 flex flex-wrap gap-4 items-end shadow-sm">
