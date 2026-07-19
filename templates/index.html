@@ -285,6 +285,7 @@
                                 <th class="p-3 text-center">Slot dùng</th>
                                 <th class="p-3 text-center">Trống</th>
                                 <th class="p-3 text-center">Cảnh báo</th>
+                                <th class="p-3 text-left">Ghi Chú</th>
                                 {% if current_user.role == 'admin' %}
                                 <th class="p-3 text-center">Thao tác</th>
                                 {% endif %}
@@ -361,6 +362,26 @@
                                     <span class="text-green-500 text-xs font-bold">✓ OK</span>
                                     {% endif %}
                                 </td>
+                                {# Cột Ghi Chú - click để sửa inline #}
+                                <td class="p-3" onclick="event.stopPropagation()">
+                                    <div class="relative group/note">
+                                        <span id="note-display-{{ acc.id }}"
+                                              class="block text-xs text-gray-500 cursor-pointer hover:text-gray-800 min-w-[120px] min-h-[20px] rounded px-1 py-0.5 hover:bg-gray-100 transition-colors"
+                                              title="Click để sửa"
+                                              onclick="startEditNote({{ acc.id }})">
+                                            {{ acc.notes or '' }}
+                                            {% if not acc.notes %}<span class="text-gray-300 italic text-[11px]">+ Thêm ghi chú</span>{% endif %}
+                                        </span>
+                                        <div id="note-edit-{{ acc.id }}" class="hidden">
+                                            <input type="text" id="note-input-{{ acc.id }}"
+                                                   value="{{ acc.notes or '' }}"
+                                                   placeholder="Nhập ghi chú..."
+                                                   class="w-full text-xs border border-indigo-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                                                   onblur="saveNote({{ acc.id }})"
+                                                   onkeydown="if(event.key==='Enter')saveNote({{ acc.id }});if(event.key==='Escape')cancelNote({{ acc.id }})">
+                                        </div>
+                                    </div>
+                                </td>
                                 {% if current_user.role == 'admin' %}
                                 <td class="p-3 text-center" onclick="event.stopPropagation()">
                                     <div class="flex items-center justify-center gap-2">
@@ -379,7 +400,7 @@
 
                             {# ── Accordion row: danh sách slot ── #}
                             <tr id="accordion-{{ acc.id }}" class="hidden">
-                                <td colspan="{% if current_user.role == 'admin' %}6{% else %}5{% endif %}" class="p-0">
+                                <td colspan="{% if current_user.role == 'admin' %}7{% else %}6{% endif %}" class="p-0">
                                     <div class="bg-gray-50/80 border-t border-gray-100 px-4 py-3">
                                         <table class="w-full text-xs">
                                             <thead>
@@ -519,6 +540,38 @@
                     });
 
                     document.getElementById('premiumEmpty').classList.toggle('hidden', visible > 0);
+                }
+
+                // ── Ghi chú inline ──
+                function startEditNote(accId) {
+                    document.getElementById('note-display-' + accId).classList.add('hidden');
+                    const editEl = document.getElementById('note-edit-' + accId);
+                    editEl.classList.remove('hidden');
+                    document.getElementById('note-input-' + accId).focus();
+                }
+
+                async function saveNote(accId) {
+                    const input = document.getElementById('note-input-' + accId);
+                    const notes = input.value.trim();
+                    try {
+                        await fetch(`/premium_acc/note/${accId}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ notes })
+                        });
+                    } catch(e) {}
+                    // Cập nhật hiển thị
+                    const display = document.getElementById('note-display-' + accId);
+                    display.innerHTML = notes
+                        ? notes
+                        : '<span class="text-gray-300 italic text-[11px]">+ Thêm ghi chú</span>';
+                    display.classList.remove('hidden');
+                    document.getElementById('note-edit-' + accId).classList.add('hidden');
+                }
+
+                function cancelNote(accId) {
+                    document.getElementById('note-display-' + accId).classList.remove('hidden');
+                    document.getElementById('note-edit-' + accId).classList.add('hidden');
                 }
                 </script>
 

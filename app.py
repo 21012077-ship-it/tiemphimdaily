@@ -81,6 +81,7 @@ class StandardSub(db.Model):
 class PremiumAccount(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(100), unique=True)
+    notes = db.Column(db.Text, default='')
     slots = db.relationship('PremiumSlot', backref='account', lazy=True, cascade="all, delete-orphan")
 
     @property
@@ -1050,6 +1051,17 @@ def edit_premium_acc(item_id):
             db.session.commit()
     return redirect(url_for('index'))
 
+
+@app.route('/premium_acc/note/<int:item_id>', methods=['POST'])
+@login_required
+@admin_required
+def update_premium_note(item_id):
+    """Lưu ghi chú cho tài khoản Netflix (AJAX)."""
+    acc = PremiumAccount.query.get_or_404(item_id)
+    data = request.get_json()
+    acc.notes = (data.get('notes') or '').strip()
+    db.session.commit()
+    return jsonify({'success': True})
 
 @app.route('/add_standard', methods=['POST'])
 @login_required
