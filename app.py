@@ -264,6 +264,13 @@ with app.app_context():
                 db.session.execute(text("ALTER TABLE account_vault ADD COLUMN next_recheck_at DATETIME"))
             db.session.commit()
 
+        if 'premium_account' in user_tables:
+            columns = [col['name'] for col in inspector.get_columns('premium_account')]
+            if 'notes' not in columns:
+                db.session.execute(text("ALTER TABLE premium_account ADD COLUMN notes TEXT DEFAULT ''"))
+                print("[DB] Migrated: premium_account.notes")
+            db.session.commit()
+
         create_default_admin()
     else:
         print("[DB] Database not ready, skipping init for now")
