@@ -83,6 +83,9 @@
                 <a href="/admin/keys" class="py-4 px-4 md:px-6 cursor-pointer tab-inactive border-transparent hover:text-gray-800 flex items-center gap-2 rounded-t-lg transition-all text-gray-500 hover:text-yellow-600 no-underline">
                     <i class="fas fa-key text-yellow-500 text-lg"></i> <span>Quản Lý Key</span>
                 </a>
+                <div id="btn-batch" onclick="switchTab('view-batch')" class="py-4 px-4 md:px-6 cursor-pointer tab-inactive border-transparent hover:text-gray-800 flex items-center gap-2 rounded-t-lg transition-all">
+                    <i class="fas fa-list-check text-purple-500 text-lg"></i> <span>Lấy Hàng Loạt</span>
+                </div>
                 {% endif %}
             </div>
         </div>
@@ -1243,9 +1246,390 @@
         </div>
     </div>
 
+    <!-- ══════════════════════════════════════════════ -->
+    <!-- VIEW: LẤY TÀI KHOẢN HÀNG LOẠT               -->
+    <!-- ══════════════════════════════════════════════ -->
+    <div id="view-batch" class="hidden max-w-5xl mx-auto">
+
+        <!-- HEADER -->
+        <div class="flex justify-between items-end mb-6 pb-4 border-b border-gray-100">
+            <div>
+                <h2 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+                    <i class="fas fa-list-check text-purple-500"></i> Lấy Tài Khoản Hàng Loạt
+                </h2>
+                <p class="text-sm text-gray-500 mt-1">Nhập danh sách email, check từng cái, đánh dấu trạng thái. Email "Sử dụng được" sẽ có cooldown 30 ngày.</p>
+            </div>
+            <button onclick="batchSwitchView('input')" class="text-xs bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-bold shadow transition-all flex items-center gap-1.5">
+                <i class="fas fa-plus"></i> Nhập Email Mới
+            </button>
+        </div>
+
+        <!-- PANEL: NHẬP EMAIL -->
+        <div id="batch-panel-input" class="hidden">
+            <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-6">
+                <h3 class="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
+                    <i class="fas fa-envelope-open-text text-purple-400"></i> Dán danh sách email vào đây (mỗi dòng 1 email)
+                </h3>
+                <textarea id="batch-email-input" rows="10" placeholder="example1@gmail.com&#10;example2@gmail.com&#10;example3@gmail.com&#10;..."
+                    class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-mono text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-300 resize-y"></textarea>
+                <div class="flex gap-3 mt-4">
+                    <button onclick="batchLoadEmails()" class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2.5 rounded-lg font-bold text-sm shadow-md transition-all flex items-center gap-2">
+                        <i class="fas fa-play"></i> Bắt Đầu
+                    </button>
+                    <button onclick="batchSwitchView('list')" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-5 py-2.5 rounded-lg font-semibold text-sm transition-all">
+                        Huỷ
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- PANEL: CHECK TỪNG EMAIL -->
+        <div id="batch-panel-check" class="hidden mb-6">
+            <div class="bg-white rounded-2xl border-2 border-purple-200 shadow-lg p-6">
+                <!-- Progress -->
+                <div class="flex justify-between items-center mb-4">
+                    <div class="text-sm font-bold text-gray-700">
+                        Email <span id="batch-current-idx" class="text-purple-600">1</span>/<span id="batch-total-count" class="text-gray-500">0</span>
+                    </div>
+                    <div class="flex gap-2 text-xs">
+                        <span class="bg-green-100 text-green-700 px-2 py-1 rounded-full font-bold" id="batch-count-usable">✓ 0</span>
+                        <span class="bg-red-100 text-red-700 px-2 py-1 rounded-full font-bold" id="batch-count-expired">✗ 0</span>
+                        <span class="bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full font-bold" id="batch-count-fam">★ 0</span>
+                    </div>
+                </div>
+                <!-- Progress bar -->
+                <div class="w-full bg-gray-200 rounded-full h-1.5 mb-5">
+                    <div id="batch-progress-bar" class="bg-purple-500 h-1.5 rounded-full transition-all duration-300" style="width:0%"></div>
+                </div>
+
+                <!-- Email hiện tại -->
+                <div class="text-center mb-5">
+                    <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Email đang check</div>
+                    <div id="batch-current-email" class="text-xl font-black text-gray-900 font-mono bg-gray-50 px-4 py-3 rounded-xl border border-gray-200 break-all"></div>
+                </div>
+
+                <!-- Status buttons -->
+                <div class="flex flex-col sm:flex-row gap-3 mb-4">
+                    <button onclick="batchMarkCurrent('expired')"
+                        class="flex-1 bg-red-50 hover:bg-red-500 hover:text-white border-2 border-red-300 text-red-700 font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 text-sm">
+                        <i class="fas fa-times-circle"></i> Hết Hạn
+                    </button>
+                    <button onclick="batchMarkCurrent('fam_unused')"
+                        class="flex-1 bg-yellow-50 hover:bg-yellow-500 hover:text-white border-2 border-yellow-300 text-yellow-700 font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 text-sm">
+                        <i class="fas fa-users-slash"></i> Fam Không Ai Sài
+                    </button>
+                    <button onclick="batchShowUsable()"
+                        class="flex-1 bg-green-500 hover:bg-green-600 text-white font-bold py-3 rounded-xl transition-all shadow-md flex items-center justify-center gap-2 text-sm">
+                        <i class="fas fa-check-circle"></i> Sử Dụng Được
+                    </button>
+                </div>
+
+                <!-- Usable form (optional) -->
+                <div id="batch-usable-form" class="hidden bg-green-50 border border-green-200 rounded-xl p-4 mb-4">
+                    <div class="text-xs font-bold text-green-700 mb-3 flex items-center gap-1.5">
+                        <i class="fas fa-info-circle"></i> Tuỳ chọn — điền hoặc bỏ trống
+                    </div>
+                    <div class="flex flex-col sm:flex-row gap-3">
+                        <div class="flex-1">
+                            <label class="text-xs text-gray-500 font-semibold mb-1 block">Tên Hồ Sơ</label>
+                            <input id="batch-profile-name" type="text" placeholder="VD: Phim HD" maxlength="50"
+                                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-300">
+                        </div>
+                        <div class="w-32">
+                            <label class="text-xs text-gray-500 font-semibold mb-1 block">PIN (nếu có)</label>
+                            <input id="batch-pin" type="text" placeholder="VD: 1234" maxlength="10"
+                                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-300">
+                        </div>
+                    </div>
+                    <div class="flex gap-3 mt-3">
+                        <button onclick="batchMarkCurrent('usable')"
+                            class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 rounded-lg transition-all text-sm shadow flex items-center justify-center gap-2">
+                            <i class="fas fa-save"></i> Xác Nhận & Tiếp Theo
+                        </button>
+                        <button onclick="batchHideUsable()"
+                            class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-2.5 px-4 rounded-lg transition-all text-sm">
+                            Huỷ
+                        </button>
+                    </div>
+                </div>
+
+                <div class="text-center">
+                    <button onclick="batchSkipToEnd()"
+                        class="text-xs text-gray-400 hover:text-gray-600 transition-colors underline underline-offset-2">
+                        Dừng phiên này
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- PANEL: DONE -->
+        <div id="batch-panel-done" class="hidden mb-6">
+            <div class="bg-white rounded-2xl border-2 border-green-200 shadow-lg p-8 text-center">
+                <div class="w-16 h-16 bg-green-100 text-green-500 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
+                    <i class="fas fa-check"></i>
+                </div>
+                <h3 class="text-lg font-bold text-gray-800 mb-1">Xong phiên này!</h3>
+                <p class="text-sm text-gray-500 mb-5" id="batch-done-summary"></p>
+                <button onclick="batchSwitchView('list')" class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2.5 rounded-lg font-bold text-sm shadow-md transition-all">
+                    Xem Danh Sách Đã Lưu
+                </button>
+            </div>
+        </div>
+
+        <!-- PANEL: DANH SÁCH ĐÃ LƯU -->
+        <div id="batch-panel-list" class="hidden">
+            <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                <div class="p-4 border-b border-gray-100 flex justify-between items-center">
+                    <h3 class="text-sm font-bold text-gray-700 flex items-center gap-2">
+                        <i class="fas fa-database text-purple-400"></i> Danh sách email đã lưu
+                    </h3>
+                    <div class="flex gap-2">
+                        <input id="batch-list-search" type="text" placeholder="Tìm email..." oninput="batchFilterList()"
+                            class="border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-purple-300 w-48">
+                        <select id="batch-list-filter" onchange="batchFilterList()" class="border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none bg-white">
+                            <option value="">Tất cả</option>
+                            <option value="pending">Chưa check</option>
+                            <option value="usable">Sử dụng được</option>
+                            <option value="expired">Hết hạn</option>
+                            <option value="fam_unused">Fam không ai sài</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead class="bg-gray-50 text-gray-500 text-xs uppercase font-bold tracking-wider border-b border-gray-200">
+                            <tr>
+                                <th class="px-4 py-3 text-left">Email</th>
+                                <th class="px-4 py-3 text-center">Trạng Thái</th>
+                                <th class="px-4 py-3 text-left">Hồ Sơ / PIN</th>
+                                <th class="px-4 py-3 text-center">Cooldown</th>
+                                <th class="px-4 py-3 text-center">Thao Tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="batch-list-tbody" class="divide-y divide-gray-50">
+                            <tr><td colspan="5" class="px-4 py-10 text-center text-gray-400 text-xs">Đang tải...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="batch-list-empty" class="hidden py-12 text-center text-gray-400">
+                    <i class="fas fa-inbox text-3xl mb-3 opacity-30"></i>
+                    <p class="text-sm">Chưa có email nào. Nhập email mới để bắt đầu!</p>
+                </div>
+            </div>
+        </div>
+
+    </div><!-- end view-batch -->
+
+    <script>
+        // ── BATCH EMAIL CHECK ──────────────────────────────────────
+        let batchQueue = [];    // [{id, email, status, ...}]
+        let batchQueueIdx = 0;
+        let batchStats = {usable: 0, expired: 0, fam: 0};
+
+        function batchSwitchView(panel) {
+            ['input', 'check', 'done', 'list'].forEach(p => {
+                const el = document.getElementById('batch-panel-' + p);
+                if (el) el.classList.add('hidden');
+            });
+            const target = document.getElementById('batch-panel-' + panel);
+            if (target) target.classList.remove('hidden');
+
+            if (panel === 'list') batchLoadList();
+        }
+
+        async function batchLoadEmails() {
+            const raw = document.getElementById('batch-email-input').value;
+            const emails = raw.split('\n').map(e => e.trim().toLowerCase()).filter(Boolean);
+            if (!emails.length) { alert('Vui lòng nhập ít nhất 1 email!'); return; }
+
+            const res = await fetch('/admin/batch-email/load', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({emails})
+            });
+            const data = await res.json();
+            if (!data.success) { alert('Lỗi tải email!'); return; }
+
+            // Chỉ lấy những email chưa trong cooldown và chưa check / expired / fam để check lại
+            batchQueue = data.entries.filter(e => !e.is_in_cooldown);
+            batchQueueIdx = 0;
+            batchStats = {usable: 0, expired: 0, fam: 0};
+
+            if (batchQueue.length === 0) {
+                alert('Tất cả email đang trong thời gian cooldown 30 ngày!');
+                batchSwitchView('list');
+                return;
+            }
+
+            batchSwitchView('check');
+            document.getElementById('batch-total-count').textContent = batchQueue.length;
+            batchShowCurrent();
+        }
+
+        function batchShowCurrent() {
+            if (batchQueueIdx >= batchQueue.length) {
+                batchFinish();
+                return;
+            }
+            const entry = batchQueue[batchQueueIdx];
+            document.getElementById('batch-current-email').textContent = entry.email;
+            document.getElementById('batch-current-idx').textContent = batchQueueIdx + 1;
+
+            const pct = (batchQueueIdx / batchQueue.length * 100).toFixed(0);
+            document.getElementById('batch-progress-bar').style.width = pct + '%';
+
+            document.getElementById('batch-usable-form').classList.add('hidden');
+            document.getElementById('batch-profile-name').value = '';
+            document.getElementById('batch-pin').value = '';
+            batchUpdateCounts();
+        }
+
+        function batchUpdateCounts() {
+            document.getElementById('batch-count-usable').textContent = '✓ ' + batchStats.usable;
+            document.getElementById('batch-count-expired').textContent = '✗ ' + batchStats.expired;
+            document.getElementById('batch-count-fam').textContent = '★ ' + batchStats.fam;
+        }
+
+        function batchShowUsable() {
+            document.getElementById('batch-usable-form').classList.remove('hidden');
+            document.getElementById('batch-profile-name').focus();
+        }
+
+        function batchHideUsable() {
+            document.getElementById('batch-usable-form').classList.add('hidden');
+        }
+
+        async function batchMarkCurrent(status) {
+            const entry = batchQueue[batchQueueIdx];
+            const profileName = document.getElementById('batch-profile-name').value.trim();
+            const pin = document.getElementById('batch-pin').value.trim();
+
+            const res = await fetch('/admin/batch-email/mark', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({id: entry.id, status, profile_name: profileName, pin})
+            });
+            const data = await res.json();
+            if (!data.success) { alert('Lỗi lưu trạng thái!'); return; }
+
+            if (status === 'usable') batchStats.usable++;
+            else if (status === 'expired') batchStats.expired++;
+            else if (status === 'fam_unused') batchStats.fam++;
+
+            batchQueueIdx++;
+            batchShowCurrent();
+        }
+
+        function batchSkipToEnd() {
+            if (!confirm('Dừng phiên này? Các email chưa check sẽ không được đánh dấu.')) return;
+            batchFinish();
+        }
+
+        function batchFinish() {
+            document.getElementById('batch-progress-bar').style.width = '100%';
+            const summary = `✓ ${batchStats.usable} sử dụng được  |  ✗ ${batchStats.expired} hết hạn  |  ★ ${batchStats.fam} fam không ai sài`;
+            document.getElementById('batch-done-summary').textContent = summary;
+            batchSwitchView('done');
+        }
+
+        async function batchLoadList() {
+            const res = await fetch('/admin/batch-email/list');
+            const data = await res.json();
+            if (!data.success) return;
+
+            const tbody = document.getElementById('batch-list-tbody');
+            tbody.innerHTML = '';
+
+            if (!data.entries.length) {
+                document.getElementById('batch-list-empty').classList.remove('hidden');
+                tbody.innerHTML = '';
+                return;
+            }
+            document.getElementById('batch-list-empty').classList.add('hidden');
+
+            data.entries.forEach(e => {
+                const statusMap = {
+                    pending:    '<span class="bg-gray-100 text-gray-600 text-xs font-bold px-2.5 py-1 rounded-full">Chưa check</span>',
+                    usable:     '<span class="bg-green-100 text-green-700 text-xs font-bold px-2.5 py-1 rounded-full">✓ Sử dụng được</span>',
+                    expired:    '<span class="bg-red-100 text-red-700 text-xs font-bold px-2.5 py-1 rounded-full">✗ Hết hạn</span>',
+                    fam_unused: '<span class="bg-yellow-100 text-yellow-700 text-xs font-bold px-2.5 py-1 rounded-full">★ Fam không ai sài</span>',
+                };
+                const cooldownBadge = e.is_in_cooldown
+                    ? `<span class="bg-orange-100 text-orange-700 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">⏳ ${e.cooldown_days_left}d</span>`
+                    : '<span class="text-gray-300 text-xs">—</span>';
+                const profilePin = (e.profile_name || e.pin)
+                    ? `<span class="text-xs text-gray-700 font-semibold">${e.profile_name || '—'}</span>${e.pin ? ` <span class="text-xs text-gray-400">| PIN: ${e.pin}</span>` : ''}`
+                    : '<span class="text-gray-300 text-xs">—</span>';
+
+                const tr = document.createElement('tr');
+                tr.className = 'batch-list-row hover:bg-gray-50 transition-colors';
+                tr.dataset.email = e.email.toLowerCase();
+                tr.dataset.status = e.status;
+                tr.innerHTML = `
+                    <td class="px-4 py-3 font-mono text-xs text-gray-800 max-w-[220px] truncate" title="${e.email}">${e.email}</td>
+                    <td class="px-4 py-3 text-center">${statusMap[e.status] || e.status}</td>
+                    <td class="px-4 py-3">${profilePin}</td>
+                    <td class="px-4 py-3 text-center">${cooldownBadge}</td>
+                    <td class="px-4 py-3 text-center">
+                        <div class="flex items-center justify-center gap-1.5">
+                            <button onclick="batchResetEntry(${e.id})" title="Reset về chưa check"
+                                class="text-gray-300 hover:text-blue-500 p-1 rounded transition-colors">
+                                <i class="fas fa-redo text-xs"></i>
+                            </button>
+                            <button onclick="batchDeleteEntry(${e.id})" title="Xoá khỏi danh sách"
+                                class="text-gray-300 hover:text-red-500 p-1 rounded transition-colors">
+                                <i class="fas fa-trash-alt text-xs"></i>
+                            </button>
+                        </div>
+                    </td>`;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function batchFilterList() {
+            const q = (document.getElementById('batch-list-search').value || '').toLowerCase();
+            const f = document.getElementById('batch-list-filter').value;
+            document.querySelectorAll('.batch-list-row').forEach(row => {
+                const matchEmail = !q || row.dataset.email.includes(q);
+                const matchStatus = !f || row.dataset.status === f;
+                row.style.display = (matchEmail && matchStatus) ? '' : 'none';
+            });
+        }
+
+        async function batchResetEntry(id) {
+            if (!confirm('Reset email này về trạng thái chưa check?')) return;
+            await fetch('/admin/batch-email/reset/' + id, {method: 'POST'});
+            batchLoadList();
+        }
+
+        async function batchDeleteEntry(id) {
+            if (!confirm('Xoá email này khỏi danh sách?')) return;
+            await fetch('/admin/batch-email/delete/' + id, {method: 'POST'});
+            batchLoadList();
+        }
+
+        // Khi vào tab batch lần đầu, mặc định hiện list
+        document.addEventListener('DOMContentLoaded', () => {
+            const batchView = document.getElementById('view-batch');
+            if (batchView) {
+                new MutationObserver(() => {
+                    if (!batchView.classList.contains('hidden')) {
+                        // Hiện list nếu chưa panel nào được mở
+                        const anyOpen = ['input','check','done','list'].some(p => {
+                            const el = document.getElementById('batch-panel-' + p);
+                            return el && !el.classList.contains('hidden');
+                        });
+                        if (!anyOpen) batchSwitchView('list');
+                    }
+                }).observe(batchView, {attributes: true, attributeFilter: ['class']});
+            }
+        });
+        // ────────────────────────────────────────────────────────────
+    </script>
+
     <script>
         function switchTab(id) {
-            ['view-todo', 'view-premium', 'view-standard', 'view-fetch', 'view-master', 'view-vault', 'view-users', 'view-activity'].forEach(v => {
+            ['view-todo', 'view-premium', 'view-standard', 'view-fetch', 'view-master', 'view-vault', 'view-users', 'view-activity', 'view-batch'].forEach(v => {
                 let el = document.getElementById(v);
                 if (el) el.classList.add('hidden');
             });
@@ -1262,7 +1646,8 @@
                 'btn-vault': 'border-teal-500 text-teal-600 bg-white',
                 'btn-users': 'border-rose-500 text-rose-600 bg-white',
                 'btn-activity': 'border-amber-500 text-amber-600 bg-white',
-                'btn-tvlogin': 'border-red-500 text-red-600 bg-white'
+                'btn-tvlogin': 'border-red-500 text-red-600 bg-white',
+                'btn-batch': 'border-purple-500 text-purple-600 bg-white'
             };
 
             Object.keys(btns).forEach(b => {
@@ -1677,7 +2062,7 @@
 
             let tabToOpen = 'view-todo';
 
-            if (hashTab && ['view-todo', 'view-premium', 'view-standard', 'view-fetch', 'view-master', 'view-vault', 'view-users', 'view-activity'].includes(hashTab)) {
+            if (hashTab && ['view-todo', 'view-premium', 'view-standard', 'view-fetch', 'view-master', 'view-vault', 'view-users', 'view-activity', 'view-batch'].includes(hashTab)) {
                 tabToOpen = hashTab;
             } else if (savedTab) {
                 tabToOpen = savedTab;

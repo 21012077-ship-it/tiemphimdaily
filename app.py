@@ -159,6 +159,33 @@ class ToolKey(db.Model):
         return max(0, delta.days)
 
 
+class EmailBatchEntry(db.Model):
+    """Lưu trạng thái từng email trong quá trình check hàng loạt."""
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(150), unique=True, nullable=False)
+    status = db.Column(db.String(50), default='pending')  # pending | usable | expired | fam_unused
+    profile_name = db.Column(db.String(100), default='')
+    pin = db.Column(db.String(20), default='')
+    note = db.Column(db.Text, default='')
+    last_used_at = db.Column(db.DateTime, nullable=True)     # Lần cuối lấy thành công
+    cooldown_until = db.Column(db.DateTime, nullable=True)   # Hết cooldown sau 30 ngày
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    @property
+    def is_in_cooldown(self):
+        if not self.cooldown_until:
+            return False
+        return datetime.utcnow() < self.cooldown_until
+
+    @property
+    def cooldown_days_left(self):
+        if not self.cooldown_until:
+            return 0
+        delta = self.cooldown_until - datetime.utcnow()
+        return max(0, delta.days)
+
+
 @login_manager.user_loader
 def load_user(user_id):
     return db.session.get(User, int(user_id))
@@ -1727,6 +1754,120 @@ def admin_toggle_key(key_id):
     tk.is_active = not tk.is_active
     db.session.commit()
     return jsonify({'success': True, 'is_active': tk.is_active})
+
+
+
+# ────────────────────────────────────────────
+# BATCH EMAIL CHECK ROUTES
+# ────────────────────────────────────────────
+
+@app.route('/admin/batch-email/load', methods=['POST'])
+@login_required
+@admin_required
+def batch_email_load():
+    """Nhận danh sách email, upsert vào DB, trả về danh sách với trạng thái cooldown."""
+    data = request.get_json(silent=True) or {}
+    emails = [e.strip().lower() for e in data.get('emails', []) if e.strip()]
+
+    result = []
+    for em in emails:
+        entry = EmailBatchEntry.query.filter_by(email=em).first()
+        if not entry:
+            entry = EmailBatchEntry(email=em, status='pending')
+            db.session.add(entry)
+            db.session.flush()  # get id
+
+        result.append({
+            'id': entry.id,
+            'email': entry.email,
+            'status': entry.status,
+            'is_in_cooldown': entry.is_in_cooldown,
+            'cooldown_days_left': entry.cooldown_days_left,
+            'profile_name': entry.profile_name or '',
+            'pin': entry.pin or '',
+            'note': entry.note or '',
+            'last_used_at': entry.last_used_at.strftime('%d/%m/%Y') if entry.last_used_at else None,
+        })
+
+    db.session.commit()
+    return jsonify({'success': True, 'entries': result})
+
+
+@app.route('/admin/batch-email/mark', methods=['POST'])
+@login_required
+@admin_required
+def batch_email_mark():
+    """Đánh dấu trạng thái cho 1 email entry."""
+    data = request.get_json(silent=True) or {}
+    entry_id = data.get('id')
+    status = data.get('status')  # usable | expired | fam_unused
+    profile_name = data.get('profile_name', '')
+    pin = data.get('pin', '')
+    note = data.get('note', '')
+
+    if not entry_id or status not in ('usable', 'expired', 'fam_unused'):
+        return jsonify({'success': False, 'message': 'Dữ liệu không hợp lệ.'}), 400
+
+    entry = EmailBatchEntry.query.get_or_404(entry_id)
+    entry.status = status
+    entry.profile_name = profile_name
+    entry.pin = pin
+    entry.note = note
+    entry.updated_at = datetime.utcnow()
+
+    if status == 'usable':
+        entry.last_used_at = datetime.utcnow()
+        entry.cooldown_until = datetime.utcnow() + timedelta(days=30)
+
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+@app.route('/admin/batch-email/list', methods=['GET'])
+@login_required
+@admin_required
+def batch_email_list():
+    """Lấy toàn bộ danh sách email đã lưu."""
+    entries = EmailBatchEntry.query.order_by(EmailBatchEntry.created_at.desc()).all()
+    result = [{
+        'id': e.id,
+        'email': e.email,
+        'status': e.status,
+        'is_in_cooldown': e.is_in_cooldown,
+        'cooldown_days_left': e.cooldown_days_left,
+        'profile_name': e.profile_name or '',
+        'pin': e.pin or '',
+        'note': e.note or '',
+        'last_used_at': e.last_used_at.strftime('%d/%m/%Y') if e.last_used_at else None,
+    } for e in entries]
+    return jsonify({'success': True, 'entries': result})
+
+
+@app.route('/admin/batch-email/reset/<int:entry_id>', methods=['POST'])
+@login_required
+@admin_required
+def batch_email_reset(entry_id):
+    """Reset trạng thái một email về pending."""
+    entry = EmailBatchEntry.query.get_or_404(entry_id)
+    entry.status = 'pending'
+    entry.cooldown_until = None
+    entry.last_used_at = None
+    entry.profile_name = ''
+    entry.pin = ''
+    entry.updated_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+@app.route('/admin/batch-email/delete/<int:entry_id>', methods=['POST'])
+@login_required
+@admin_required
+def batch_email_delete(entry_id):
+    """Xóa một email khỏi danh sách."""
+    entry = EmailBatchEntry.query.get_or_404(entry_id)
+    db.session.delete(entry)
+    db.session.commit()
+    return jsonify({'success': True})
 
 
 scheduler = BackgroundScheduler()
