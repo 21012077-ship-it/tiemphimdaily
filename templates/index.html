@@ -1695,6 +1695,11 @@
             let targetEl = document.getElementById(id);
             if (targetEl) targetEl.classList.remove('hidden');
 
+            // Nếu vào tab batch, tự mở danh sách luôn
+            if (id === 'view-batch') {
+                batchSwitchView('list');
+            }
+
             const btns = {
                 'btn-todo': 'border-purple-600 text-purple-700 bg-white',
                 'btn-premium': 'border-yellow-500 text-yellow-600 bg-white',
