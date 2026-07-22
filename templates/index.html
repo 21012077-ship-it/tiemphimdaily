@@ -1274,7 +1274,7 @@
                     class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-mono text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-300 resize-y"></textarea>
                 <div class="flex gap-3 mt-4">
                     <button onclick="batchLoadEmails()" class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2.5 rounded-lg font-bold text-sm shadow-md transition-all flex items-center gap-2">
-                        <i class="fas fa-play"></i> Bắt Đầu
+                        <i class="fas fa-save"></i> Lưu Danh Sách
                     </button>
                     <button onclick="batchSwitchView('list')" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-5 py-2.5 rounded-lg font-semibold text-sm transition-all">
                         Huỷ
@@ -1379,10 +1379,17 @@
         <!-- PANEL: DANH SÁCH ĐÃ LƯU -->
         <div id="batch-panel-list" class="hidden">
             <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                <div class="p-4 border-b border-gray-100 flex justify-between items-center">
-                    <h3 class="text-sm font-bold text-gray-700 flex items-center gap-2">
-                        <i class="fas fa-database text-purple-400"></i> Danh sách email đã lưu
-                    </h3>
+                <div class="p-4 border-b border-gray-100 flex flex-wrap justify-between items-center gap-3">
+                    <div class="flex items-center gap-3">
+                        <h3 class="text-sm font-bold text-gray-700 flex items-center gap-2">
+                            <i class="fas fa-database text-purple-400"></i> Danh sách email đã lưu
+                            <span id="batch-list-count" class="text-xs font-normal text-gray-400"></span>
+                        </h3>
+                        <button onclick="batchStartChecking()" id="btn-batch-start-check"
+                            class="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-4 py-1.5 rounded-lg shadow transition-all flex items-center gap-1.5">
+                            <i class="fas fa-play"></i> Bắt Đầu Check
+                        </button>
+                    </div>
                     <div class="flex gap-2">
                         <input id="batch-list-search" type="text" placeholder="Tìm email..." oninput="batchFilterList()"
                             class="border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-purple-300 w-48">
@@ -1442,22 +1449,41 @@
             const emails = raw.split('\n').map(e => e.trim().toLowerCase()).filter(Boolean);
             if (!emails.length) { alert('Vui lòng nhập ít nhất 1 email!'); return; }
 
+            const btn = document.querySelector('#batch-panel-input button');
+            const origText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang lưu...';
+            btn.disabled = true;
+
             const res = await fetch('/admin/batch-email/load', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({emails})
             });
             const data = await res.json();
-            if (!data.success) { alert('Lỗi tải email!'); return; }
+            btn.innerHTML = origText;
+            btn.disabled = false;
 
-            // Chỉ lấy những email chưa trong cooldown và chưa check / expired / fam để check lại
+            if (!data.success) { alert('Lỗi lưu email!'); return; }
+
+            // Chỉ lưu vào DB, sau đó hiện danh sách để user tự bấm "Bắt Đầu Check"
+            const added = data.entries.filter(e => e.status === 'pending').length;
+            document.getElementById('batch-email-input').value = '';
+            batchSwitchView('list');
+            showToastMessage(`Đã lưu ${data.entries.length} email (${added} chưa check)`);
+        }
+
+        async function batchStartChecking() {
+            // Lấy danh sách từ server, lấy những cái không trong cooldown
+            const res = await fetch('/admin/batch-email/list');
+            const data = await res.json();
+            if (!data.success) return;
+
             batchQueue = data.entries.filter(e => !e.is_in_cooldown);
             batchQueueIdx = 0;
             batchStats = {usable: 0, expired: 0, fam: 0};
 
             if (batchQueue.length === 0) {
-                alert('Tất cả email đang trong thời gian cooldown 30 ngày!');
-                batchSwitchView('list');
+                alert('Không có email nào cần check! (Tất cả đang trong cooldown hoặc chưa có email nào)');
                 return;
             }
 
@@ -1539,6 +1565,24 @@
 
             const tbody = document.getElementById('batch-list-tbody');
             tbody.innerHTML = '';
+
+            // Cập nhật số lượng
+            const total = data.entries.length;
+            const pending = data.entries.filter(e => !e.is_in_cooldown).length;
+            const countEl = document.getElementById('batch-list-count');
+            if (countEl) countEl.textContent = `(${total} email — ${pending} chưa check)`;
+
+            // Disable nút check nếu không có gì để check
+            const startBtn = document.getElementById('btn-batch-start-check');
+            if (startBtn) {
+                if (pending === 0) {
+                    startBtn.disabled = true;
+                    startBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                } else {
+                    startBtn.disabled = false;
+                    startBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                }
+            }
 
             if (!data.entries.length) {
                 document.getElementById('batch-list-empty').classList.remove('hidden');
