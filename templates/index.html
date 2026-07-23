@@ -13,6 +13,9 @@
         .tab-inactive { color: #6b7280; font-weight: 500; border-bottom: 2px solid transparent; }
         .tab-inactive:hover { background-color: #f9fafb; color: #374151; }
         .transition-all { transition-property: all; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 300ms; }
+        /* Ẩn scrollbar trên thanh tab — giữ 1 hàng, không hiện mũi tên */
+        .tab-scroll { overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; }
+        .tab-scroll::-webkit-scrollbar { display: none; }
     </style>
 </head>
 <body class="p-3 md:p-5 min-h-screen">
@@ -43,50 +46,50 @@
         </div>
 
         <div class="bg-white rounded-t-xl shadow-sm border-b border-gray-200 px-3 md:px-5 pt-2">
-            <div class="flex flex-wrap gap-x-1 gap-y-0">
-                <div id="btn-todo" onclick="switchTab('view-todo')" class="py-3 px-3 md:px-4 cursor-pointer tab-active border-purple-600 text-purple-700 flex items-center gap-1.5 rounded-t-lg transition-all text-sm">
+            <div class="tab-scroll flex space-x-1 min-w-0">
+                <div id="btn-todo" onclick="switchTab('view-todo')" class="flex-shrink-0 py-3 px-3 md:px-4 cursor-pointer tab-active border-purple-600 text-purple-700 flex items-center gap-1.5 rounded-t-lg transition-all text-sm whitespace-nowrap">
                     <div class="relative">
                         <i class="fas fa-clipboard-list text-base"></i>
                         {% if todos|length > 0 %}
                         <span class="absolute -top-2 -right-2 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full animate-bounce shadow-sm ring-2 ring-white">{{ todos|length }}</span>
                         {% endif %}
                     </div>
-                    <span class="hidden sm:inline">Cần Làm Ngay</span>
+                    <span>Cần Làm Ngay</span>
                 </div>
-                <div id="btn-premium" onclick="switchTab('view-premium')" class="py-3 px-3 md:px-4 cursor-pointer tab-inactive border-transparent flex items-center gap-1.5 rounded-t-lg transition-all text-sm">
+                <div id="btn-premium" onclick="switchTab('view-premium')" class="flex-shrink-0 py-3 px-3 md:px-4 cursor-pointer tab-inactive border-transparent flex items-center gap-1.5 rounded-t-lg transition-all text-sm whitespace-nowrap">
                     <i class="fas fa-crown text-yellow-500"></i> <span>Gói Cao Cấp</span>
                 </div>
-                <div id="btn-standard" onclick="switchTab('view-standard')" class="py-3 px-3 md:px-4 cursor-pointer tab-inactive border-transparent flex items-center gap-1.5 rounded-t-lg transition-all text-sm">
+                <div id="btn-standard" onclick="switchTab('view-standard')" class="flex-shrink-0 py-3 px-3 md:px-4 cursor-pointer tab-inactive border-transparent flex items-center gap-1.5 rounded-t-lg transition-all text-sm whitespace-nowrap">
                     <i class="fas fa-user text-blue-500"></i> <span>Gói Phổ Thông</span>
                 </div>
                 {% if current_user.role == 'ctv' %}
-                <div id="btn-fetch" onclick="switchTab('view-fetch')" class="py-3 px-3 md:px-4 cursor-pointer tab-inactive border-transparent flex items-center gap-1.5 rounded-t-lg transition-all text-sm">
+                <div id="btn-fetch" onclick="switchTab('view-fetch')" class="flex-shrink-0 py-3 px-3 md:px-4 cursor-pointer tab-inactive border-transparent flex items-center gap-1.5 rounded-t-lg transition-all text-sm whitespace-nowrap">
                     <i class="fas fa-tv text-teal-500"></i> <span>Lấy Tài Khoản</span>
                 </div>
                 {% endif %}
                 {% if current_user.role == 'admin' %}
-                <div id="btn-master" onclick="switchTab('view-master')" class="py-3 px-3 md:px-4 cursor-pointer tab-inactive border-transparent flex items-center gap-1.5 rounded-t-lg transition-all text-sm">
+                <div id="btn-master" onclick="switchTab('view-master')" class="flex-shrink-0 py-3 px-3 md:px-4 cursor-pointer tab-inactive border-transparent flex items-center gap-1.5 rounded-t-lg transition-all text-sm whitespace-nowrap">
                     <i class="fas fa-database text-gray-500"></i> <span>Tổng Hợp</span>
                 </div>
-                <div id="btn-vault" onclick="switchTab('view-vault')" class="py-3 px-3 md:px-4 cursor-pointer tab-inactive border-transparent flex items-center gap-1.5 rounded-t-lg transition-all text-sm">
+                <div id="btn-vault" onclick="switchTab('view-vault')" class="flex-shrink-0 py-3 px-3 md:px-4 cursor-pointer tab-inactive border-transparent flex items-center gap-1.5 rounded-t-lg transition-all text-sm whitespace-nowrap">
                     <i class="fas fa-box-open text-teal-500"></i> <span>Kho Tài Khoản</span>
                 </div>
-                <div id="btn-tvlogin" onclick="switchTab('view-tvlogin')" class="py-3 px-3 md:px-4 cursor-pointer tab-inactive border-transparent flex items-center gap-1.5 rounded-t-lg transition-all text-sm">
+                <div id="btn-tvlogin" onclick="switchTab('view-tvlogin')" class="flex-shrink-0 py-3 px-3 md:px-4 cursor-pointer tab-inactive border-transparent flex items-center gap-1.5 rounded-t-lg transition-all text-sm whitespace-nowrap">
                     <i class="fas fa-tv text-red-500"></i> <span>Duyệt Mã TV</span>
                 </div>
-                <div id="btn-users" onclick="switchTab('view-users')" class="py-3 px-3 md:px-4 cursor-pointer tab-inactive border-transparent flex items-center gap-1.5 rounded-t-lg transition-all text-sm">
-                    <i class="fas fa-users text-rose-500"></i> <span>Tài Khoản Hệ Thống</span>
+                <div id="btn-users" onclick="switchTab('view-users')" class="flex-shrink-0 py-3 px-3 md:px-4 cursor-pointer tab-inactive border-transparent flex items-center gap-1.5 rounded-t-lg transition-all text-sm whitespace-nowrap">
+                    <i class="fas fa-users text-rose-500"></i> <span>TK Hệ Thống</span>
                 </div>
-                <div id="btn-activity" onclick="switchTab('view-activity')" class="py-3 px-3 md:px-4 cursor-pointer tab-inactive border-transparent flex items-center gap-1.5 rounded-t-lg transition-all text-sm">
-                    <i class="fas fa-chart-line text-amber-500"></i> <span>Hoạt Động CTV/TV</span>
+                <div id="btn-activity" onclick="switchTab('view-activity')" class="flex-shrink-0 py-3 px-3 md:px-4 cursor-pointer tab-inactive border-transparent flex items-center gap-1.5 rounded-t-lg transition-all text-sm whitespace-nowrap">
+                    <i class="fas fa-chart-line text-amber-500"></i> <span>Hoạt Động CTV</span>
                 </div>
-                <a href="/admin/keys" class="py-3 px-3 md:px-4 cursor-pointer tab-inactive border-transparent flex items-center gap-1.5 rounded-t-lg transition-all text-sm text-gray-500 hover:text-yellow-600 no-underline">
+                <a href="/admin/keys" class="flex-shrink-0 py-3 px-3 md:px-4 cursor-pointer tab-inactive border-transparent flex items-center gap-1.5 rounded-t-lg transition-all text-sm text-gray-500 hover:text-yellow-600 no-underline whitespace-nowrap">
                     <i class="fas fa-key text-yellow-500"></i> <span>Quản Lý Key</span>
                 </a>
-                <div id="btn-batch" onclick="switchTab('view-batch')" class="py-3 px-3 md:px-4 cursor-pointer tab-inactive border-transparent flex items-center gap-1.5 rounded-t-lg transition-all text-sm">
+                <div id="btn-batch" onclick="switchTab('view-batch')" class="flex-shrink-0 py-3 px-3 md:px-4 cursor-pointer tab-inactive border-transparent flex items-center gap-1.5 rounded-t-lg transition-all text-sm whitespace-nowrap">
                     <i class="fas fa-list-check text-purple-500"></i> <span>Lấy Hàng Loạt</span>
                 </div>
-                <div id="btn-netflix" onclick="switchTab('view-netflix')" class="py-3 px-3 md:px-4 cursor-pointer tab-inactive border-transparent flex items-center gap-1.5 rounded-t-lg transition-all text-sm">
+                <div id="btn-netflix" onclick="switchTab('view-netflix')" class="flex-shrink-0 py-3 px-3 md:px-4 cursor-pointer tab-inactive border-transparent flex items-center gap-1.5 rounded-t-lg transition-all text-sm whitespace-nowrap">
                     <i class="fas fa-film text-red-500"></i> <span>Quản Lý TK Netflix</span>
                 </div>
                 {% endif %}
