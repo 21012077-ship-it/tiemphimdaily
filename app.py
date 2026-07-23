@@ -186,6 +186,66 @@ class EmailBatchEntry(db.Model):
         return max(0, delta.days)
 
 
+class NetflixAccount(db.Model):
+    """Tài khoản Netflix được thêm vào hệ thống để cấp cho khách hàng."""
+    id = db.Column(db.Integer, primary_key=True)
+    login = db.Column(db.String(150), nullable=False)       # email hoặc tên đăng nhập
+    password = db.Column(db.String(150), nullable=False)    # mật khẩu tài khoản
+    added_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)  # ngày thêm vào hệ thống
+    notes = db.Column(db.Text, default='')
+    profiles = db.relationship('NetflixProfile', backref='account', lazy=True,
+                               cascade='all, delete-orphan',
+                               order_by='NetflixProfile.profile_number')
+
+    @property
+    def expires_at(self):
+        return self.added_at + timedelta(days=30)
+
+    @property
+    def days_left(self):
+        now = datetime.utcnow()
+        delta = self.expires_at - now
+        return max(0, delta.days)
+
+    @property
+    def is_expired(self):
+        return datetime.utcnow() >= self.expires_at
+
+    @property
+    def used_count(self):
+        return sum(1 for p in self.profiles if p.status == 'used')
+
+    @property
+    def computed_status(self):
+        """Tính trạng thái động: expired > no_profiles > expiring_soon > active"""
+        if self.is_expired:
+            return 'expired'
+        if self.used_count >= 5:
+            return 'no_profiles'
+        if self.days_left <= 5:
+            return 'expiring_soon'
+        return 'active'
+
+    @property
+    def next_profile(self):
+        """Hồ sơ chưa dùng tiếp theo (theo thứ tự 1→5)."""
+        for p in sorted(self.profiles, key=lambda x: x.profile_number):
+            if p.status == 'unused':
+                return p
+        return None
+
+
+class NetflixProfile(db.Model):
+    """Mỗi hồ sơ trong tài khoản Netflix (tối đa 5 hồ sơ)."""
+    id = db.Column(db.Integer, primary_key=True)
+    account_id = db.Column(db.Integer, db.ForeignKey('netflix_account.id'), nullable=False)
+    profile_number = db.Column(db.Integer, nullable=False)   # 1–5
+    name = db.Column(db.String(50), nullable=False)           # "Hồ sơ 1" ... "Hồ sơ 5"
+    pin = db.Column(db.String(4), nullable=False)             # mã PIN 4 chữ số
+    status = db.Column(db.String(20), default='unused')       # unused | used
+    assigned_at = db.Column(db.DateTime, nullable=True)       # thời điểm được cấp
+
+
 @login_manager.user_loader
 def load_user(user_id):
     return db.session.get(User, int(user_id))
@@ -298,7 +358,11 @@ with app.app_context():
                 print("[DB] Migrated: premium_account.notes")
             db.session.commit()
 
+        # netflix_account & netflix_profile: tạo tự động qua create_all, không cần migrate thêm cột
+        print("[DB] NetflixAccount / NetflixProfile tables ready.")
+
         create_default_admin()
+
     else:
         print("[DB] Database not ready, skipping init for now")
 
@@ -1870,7 +1934,158 @@ def batch_email_delete(entry_id):
     return jsonify({'success': True})
 
 
+
+# ============================================================
+# QUẢN LÝ TÀI KHOẢN NETFLIX (30 ngày, 5 hồ sơ)
+# ============================================================
+
+import random as _nf_random
+
+
+def _generate_unique_pins():
+    """Sinh 5 mã PIN 4 chữ số duy nhất trong cùng tài khoản."""
+    pins = set()
+    while len(pins) < 5:
+        pins.add(f"{_nf_random.randint(0, 9999):04d}")
+    return list(pins)
+
+
+def _netflix_account_to_dict(acc):
+    """Chuyển NetflixAccount thành dict để trả về JSON."""
+    status = acc.computed_status
+    status_map = {
+        'active': 'Đang hoạt động',
+        'expiring_soon': 'Sắp hết hạn',
+        'no_profiles': 'Đã hết hồ sơ',
+        'expired': 'Đã hết hạn',
+    }
+    profiles = []
+    for p in acc.profiles:
+        profiles.append({
+            'id': p.id,
+            'profile_number': p.profile_number,
+            'name': p.name,
+            'pin': p.pin,
+            'status': p.status,
+            'status_label': 'Đã sử dụng' if p.status == 'used' else 'Chưa sử dụng',
+            'assigned_at': p.assigned_at.strftime('%d/%m/%Y %H:%M') if p.assigned_at else None,
+        })
+    return {
+        'id': acc.id,
+        'login': acc.login,
+        'password': acc.password,
+        'added_at': acc.added_at.strftime('%d/%m/%Y'),
+        'expires_at': acc.expires_at.strftime('%d/%m/%Y'),
+        'days_left': acc.days_left,
+        'used_count': acc.used_count,
+        'status': status,
+        'status_label': status_map.get(status, status),
+        'notes': acc.notes or '',
+        'profiles': profiles,
+    }
+
+
+@app.route('/netflix-accounts/list', methods=['GET'])
+@login_required
+@admin_required
+def netflix_accounts_list():
+    """Trả về danh sách tất cả tài khoản Netflix dưới dạng JSON."""
+    accounts = NetflixAccount.query.order_by(NetflixAccount.added_at.desc()).all()
+    return jsonify({'success': True, 'accounts': [_netflix_account_to_dict(a) for a in accounts]})
+
+
+@app.route('/netflix-accounts/add', methods=['POST'])
+@login_required
+@admin_required
+def netflix_accounts_add():
+    """Thêm tài khoản Netflix mới và tự sinh 5 hồ sơ với PIN ngẫu nhiên."""
+    data = request.get_json(silent=True) or {}
+    login = (data.get('login') or '').strip()
+    password = (data.get('password') or '').strip()
+    notes = (data.get('notes') or '').strip()
+
+    if not login or not password:
+        return jsonify({'success': False, 'message': 'Vui lòng nhập đầy đủ tài khoản và mật khẩu.'}), 400
+
+    acc = NetflixAccount(login=login, password=password, notes=notes)
+    db.session.add(acc)
+    db.session.flush()  # lấy acc.id trước khi tạo profiles
+
+    pins = _generate_unique_pins()
+    for i, pin in enumerate(pins, start=1):
+        profile = NetflixProfile(
+            account_id=acc.id,
+            profile_number=i,
+            name=f'Hồ sơ {i}',
+            pin=pin,
+            status='unused'
+        )
+        db.session.add(profile)
+
+    db.session.commit()
+    log_activity('Thêm tài khoản Netflix', f"Login: {login}")
+    return jsonify({'success': True, 'account': _netflix_account_to_dict(acc)})
+
+
+@app.route('/netflix-accounts/<int:acc_id>/claim', methods=['POST'])
+@login_required
+@admin_required
+def netflix_accounts_claim(acc_id):
+    """Cấp hồ sơ tiếp theo chưa dùng của tài khoản cho khách hàng."""
+    acc = NetflixAccount.query.get_or_404(acc_id)
+
+    if acc.is_expired:
+        return jsonify({'success': False, 'message': 'Tài khoản đã hết hạn 30 ngày, không thể cấp thêm hồ sơ.'}), 400
+
+    profile = acc.next_profile
+    if not profile:
+        return jsonify({'success': False, 'message': 'Tài khoản này đã được cấp đủ 5 hồ sơ.'}), 400
+
+    profile.status = 'used'
+    profile.assigned_at = datetime.utcnow()
+    db.session.commit()
+    log_activity('Lấy tài khoản Netflix', f"Login: {acc.login} — {profile.name} (PIN: {profile.pin})")
+
+    return jsonify({
+        'success': True,
+        'message': f'Đã cấp {profile.name} thành công.',
+        'result': {
+            'login': acc.login,
+            'password': acc.password,
+            'profile_name': profile.name,
+            'pin': profile.pin,
+        },
+        'account': _netflix_account_to_dict(acc),
+    })
+
+
+@app.route('/netflix-accounts/<int:acc_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def netflix_accounts_delete(acc_id):
+    """Xóa tài khoản Netflix và tất cả hồ sơ liên quan."""
+    acc = NetflixAccount.query.get_or_404(acc_id)
+    login = acc.login
+    db.session.delete(acc)
+    db.session.commit()
+    log_activity('Xóa tài khoản Netflix', f"Login: {login}")
+    return jsonify({'success': True, 'message': f'Đã xóa tài khoản {login}.'})
+
+
+@app.route('/netflix-accounts/<int:acc_id>/update-notes', methods=['POST'])
+@login_required
+@admin_required
+def netflix_accounts_update_notes(acc_id):
+    """Cập nhật ghi chú cho tài khoản Netflix."""
+    acc = NetflixAccount.query.get_or_404(acc_id)
+    data = request.get_json(silent=True) or {}
+    acc.notes = (data.get('notes') or '').strip()
+    db.session.commit()
+    return jsonify({'success': True})
+
+
 scheduler = BackgroundScheduler()
+
 scheduler.add_job(
     func=auto_recheck_assigned_accounts,
     trigger='interval',
