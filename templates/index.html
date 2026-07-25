@@ -92,6 +92,9 @@
                 <div id="btn-netflix" onclick="switchTab('view-netflix')" class="flex-shrink-0 py-3 px-3 md:px-4 cursor-pointer tab-inactive border-transparent flex items-center gap-1.5 rounded-t-lg transition-all text-sm whitespace-nowrap">
                     <i class="fas fa-film text-red-500"></i> <span>Quản Lý TK Netflix</span>
                 </div>
+                <div id="btn-bankcard" onclick="switchTab('view-bankcard')" class="flex-shrink-0 py-3 px-3 md:px-4 cursor-pointer tab-inactive border-transparent flex items-center gap-1.5 rounded-t-lg transition-all text-sm whitespace-nowrap">
+                    <i class="fas fa-credit-card text-emerald-500"></i> <span>Thẻ Ngân Hàng</span>
+                </div>
                 {% endif %}
             </div>
         </div>
@@ -431,8 +434,13 @@
                                                         <span class="bg-gray-800 text-white text-[10px] font-bold px-2 py-0.5 rounded">{{ slot.profile_name or '—' }}</span>
                                                     </td>
                                                     <td class="py-2.5">
-                                                        <button onclick="openEditModal('{{ slot.id }}', '{{ slot.customer_name }}', '{{ slot.profile_name }}', '{{ slot.source }}', '{{ slot.expiry_date }}', '{{ slot.contact_link }}')"
-                                                                class="font-semibold text-gray-800 hover:text-blue-600 text-left transition-colors">
+                                                        <button class="edit-slot-btn font-semibold text-gray-800 hover:text-blue-600 text-left transition-colors"
+                                                                data-id="{{ slot.id }}"
+                                                                data-name="{{ slot.customer_name or ''|e }}"
+                                                                data-profile="{{ slot.profile_name or ''|e }}"
+                                                                data-source="{{ slot.source or ''|e }}"
+                                                                data-expiry="{{ slot.expiry_date.strftime('%Y-%m-%d') if slot.expiry_date else '' }}"
+                                                                data-link="{{ slot.contact_link or ''|e }}">
                                                             {{ slot.customer_name }}
                                                         </button>
                                                         <div class="text-gray-400 text-[10px] mt-0.5">{{ slot.created_by_name or '—' }}</div>
@@ -502,6 +510,16 @@
 
                 <script>
                 let currentPremiumFilter = 'all';
+
+                // Event delegation cho nút sửa slot (tránh lỗi ký tự đặc biệt khi dùng inline onclick)
+                document.addEventListener('click', function(e) {
+                    const btn = e.target.closest('.edit-slot-btn');
+                    if (btn) {
+                        e.stopPropagation();
+                        const d = btn.dataset;
+                        openEditModal(d.id, d.name, d.profile, d.source, d.expiry, d.link || '');
+                    }
+                });
 
                 function toggleAccordion(accId) {
                     const row = document.getElementById('accordion-' + accId);
@@ -1076,6 +1094,168 @@
         </div>
     </div>
 
+
+    <!-- ══ MODAL: THÊM THẺ NGÂN HÀNG ══════════════════════════════ -->
+    <div id="modal-bc-add" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
+            <div class="flex items-center justify-between mb-5">
+                <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+                    <i class="fas fa-credit-card text-emerald-500"></i> Thêm Thẻ Ngân Hàng
+                </h3>
+                <button onclick="document.getElementById('modal-bc-add').classList.add('hidden')"
+                        class="text-gray-400 hover:text-gray-600 transition-colors">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form action="/bank_cards/add" method="POST" class="space-y-4">
+                <div>
+                    <label class="text-xs font-bold text-gray-600 block mb-1">Số thẻ <span class="text-red-500">*</span></label>
+                    <input type="text" name="card_number" placeholder="VD: 4111 1111 1111 1111" required
+                           class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-xs font-bold text-gray-600 block mb-1">Chủ thẻ</label>
+                        <input type="text" name="card_holder" placeholder="Tên trên thẻ"
+                               class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-gray-600 block mb-1">Ngân hàng</label>
+                        <input type="text" name="bank_name" placeholder="VCB, MB, TP..."
+                               class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                    </div>
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-gray-600 block mb-1">Ghi chú</label>
+                    <input type="text" name="notes" placeholder="Tuỳ chọn..."
+                           class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                </div>
+                <div class="flex gap-2 pt-1">
+                    <button type="button" onclick="document.getElementById('modal-bc-add').classList.add('hidden')"
+                            class="w-1/3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl py-2.5 text-sm font-semibold transition-colors">Huỷ</button>
+                    <button type="submit"
+                            class="w-2/3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl py-2.5 text-sm font-bold transition-colors flex items-center justify-center gap-2">
+                        <i class="fas fa-plus"></i> Thêm thẻ
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ══ MODAL: SỬA THẺ NGÂN HÀNG ══════════════════════════════ -->
+    <div id="modal-bc-edit" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
+            <div class="flex items-center justify-between mb-5">
+                <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+                    <i class="fas fa-pen text-blue-500"></i> Sửa Thẻ Ngân Hàng
+                </h3>
+                <button onclick="document.getElementById('modal-bc-edit').classList.add('hidden')"
+                        class="text-gray-400 hover:text-gray-600 transition-colors">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <label class="text-xs font-bold text-gray-600 block mb-1">Số thẻ <span class="text-red-500">*</span></label>
+                    <input type="text" id="bc-edit-number" placeholder="Số thẻ"
+                           class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-blue-300">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-xs font-bold text-gray-600 block mb-1">Chủ thẻ</label>
+                        <input type="text" id="bc-edit-holder" placeholder="Tên chủ thẻ"
+                               class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-gray-600 block mb-1">Ngân hàng</label>
+                        <input type="text" id="bc-edit-bank" placeholder="VCB, MB..."
+                               class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+                    </div>
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-gray-600 block mb-1">Ghi chú</label>
+                    <input type="text" id="bc-edit-notes" placeholder="Ghi chú"
+                           class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+                </div>
+                <div class="flex gap-2 pt-1">
+                    <button type="button" onclick="document.getElementById('modal-bc-edit').classList.add('hidden')"
+                            class="w-1/3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl py-2.5 text-sm font-semibold transition-colors">Huỷ</button>
+                    <button type="button" onclick="bcSaveEdit()"
+                            class="w-2/3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl py-2.5 text-sm font-bold transition-colors flex items-center justify-center gap-2">
+                        <i class="fas fa-save"></i> Lưu thay đổi
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══ MODAL: KẾT QUẢ LẤY THẺ ════════════════════════════════ -->
+    <div id="modal-bc-result" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
+            <div class="text-center mb-5">
+                <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center mx-auto mb-3 shadow-lg">
+                    <i class="fas fa-credit-card text-white text-2xl"></i>
+                </div>
+                <h3 class="text-lg font-bold text-gray-800">Thẻ được chọn</h3>
+                <p class="text-xs text-gray-500 mt-1">Dịch vụ: <span id="bc-result-service" class="font-bold text-blue-600"></span></p>
+            </div>
+            <div class="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-5 mb-4 text-white shadow-inner">
+                <div class="text-xs text-gray-400 mb-1 uppercase tracking-widest">Số thẻ</div>
+                <div class="font-mono text-xl font-bold tracking-widest mb-3" id="bc-result-number">—</div>
+                <div class="flex justify-between items-end">
+                    <div>
+                        <div class="text-xs text-gray-400 uppercase tracking-widest mb-0.5">Chủ thẻ</div>
+                        <div class="font-semibold text-sm" id="bc-result-holder">—</div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-xs text-gray-400 uppercase tracking-widest mb-0.5">Ngân hàng</div>
+                        <div class="font-bold text-sm" id="bc-result-bank">—</div>
+                    </div>
+                </div>
+            </div>
+            <div id="bc-result-notes-wrap" class="bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 mb-4 hidden">
+                <div class="text-xs font-bold text-yellow-700 mb-0.5">Ghi chú:</div>
+                <div class="text-sm text-yellow-800" id="bc-result-notes"></div>
+            </div>
+            <div class="bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 mb-5 text-center">
+                <p class="text-xs text-emerald-700 font-semibold">✅ Đã tự động đánh dấu thẻ này đã add <span id="bc-result-service2" class="font-bold"></span></p>
+            </div>
+            <button onclick="document.getElementById('modal-bc-result').classList.add('hidden')"
+                    class="w-full bg-gray-900 hover:bg-black text-white rounded-xl py-3 text-sm font-bold transition-colors">
+                Đóng
+            </button>
+        </div>
+    </div>
+
+    <!-- ══ MODAL: ADD DỊCH VỤ VÀO THẺ ══════════════════════════ -->
+    <div id="modal-bc-add-service" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-base font-bold text-gray-800">Thêm dịch vụ vào thẻ</h3>
+                <button onclick="document.getElementById('modal-bc-add-service').classList.add('hidden')"
+                        class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+            </div>
+            <p class="text-xs text-gray-500 mb-3">Chọn dịch vụ hoặc nhập tên mới:</p>
+            <div class="flex flex-wrap gap-2 mb-3" id="bc-svc-presets">
+                {% for sn in ['Netflix','Spotify','YouTube Premium','Apple TV+','Disney+','HBO Max','Amazon Prime'] %}
+                <button onclick="bcSelectPresetService('{{ sn }}')"
+                        class="bc-svc-preset-btn px-3 py-1.5 rounded-lg text-xs font-bold border transition-all bg-gray-50 hover:bg-blue-50 text-gray-600 hover:text-blue-700 border-gray-200 hover:border-blue-300"
+                        data-svc="{{ sn }}">{{ sn }}</button>
+                {% endfor %}
+            </div>
+            <input type="text" id="bc-svc-input" placeholder="Hoặc nhập tên dịch vụ..."
+                   class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-emerald-300">
+            <div class="flex gap-2">
+                <button onclick="document.getElementById('modal-bc-add-service').classList.add('hidden')"
+                        class="w-1/3 bg-gray-100 text-gray-700 rounded-xl py-2 text-sm font-semibold">Huỷ</button>
+                <button onclick="bcConfirmAddService()"
+                        class="w-2/3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl py-2 text-sm font-bold transition-colors">
+                    <i class="fas fa-plus mr-1"></i> Thêm dịch vụ
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div id="modalAddSlot" class="fixed inset-0 bg-black/60 hidden backdrop-blur-sm z-50 flex items-center justify-center">
         <div class="bg-white rounded-2xl shadow-2xl w-96 p-6">
             <h3 class="text-lg font-bold mb-4">Thêm Khách Vào Slot</h3>
@@ -1492,6 +1672,164 @@
                 {% endif %}
             </div><!-- end view-netflix -->
 
+            <!-- ══════════════════════════════════════════════════════
+                 THẺ NGÂN HÀNG
+            ══════════════════════════════════════════════════════ -->
+            <div id="view-bankcard" class="hidden">
+            {% if current_user.role == 'admin' %}
+
+                <!-- Stats row -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5" id="bc-stats-row">
+                    <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex items-center gap-3">
+                        <div class="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
+                            <i class="fas fa-credit-card text-emerald-500"></i>
+                        </div>
+                        <div>
+                            <div class="text-2xl font-black text-gray-900" id="bc-stat-total">{{ bank_cards|length }}</div>
+                            <div class="text-xs text-gray-400 font-medium">Tổng thẻ</div>
+                        </div>
+                    </div>
+                    {% set svc_counts = {} %}
+                    {% for sn in ['Netflix','Spotify','YouTube Premium','Apple TV+','Disney+','HBO Max','Amazon Prime'] %}
+                    <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex items-center gap-3">
+                        <div class="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+                            <i class="fas fa-check-circle text-blue-400"></i>
+                        </div>
+                        <div>
+                            <div class="text-xl font-black text-gray-900">
+                                {{ bank_cards|selectattr('service_names','contains',sn)|list|length }}
+                                <span class="text-sm text-gray-400 font-normal">/ {{ bank_cards|length }}</span>
+                            </div>
+                            <div class="text-xs text-gray-400 font-medium truncate">{{ sn }}</div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <!-- Toolbar -->
+                <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-4">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button onclick="document.getElementById('modal-bc-add').classList.remove('hidden')"
+                                class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-1.5 transition-colors">
+                            <i class="fas fa-plus"></i> Thêm thẻ mới
+                        </button>
+                        <div class="h-6 border-l border-gray-200"></div>
+                        <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Lấy thẻ cho:</span>
+                        {% for sn in ['Netflix','Spotify','YouTube Premium','Apple TV+','Disney+','HBO Max','Amazon Prime'] %}
+                        <button onclick="bcGetCard('{{ sn }}')"
+                                class="bc-get-btn px-3 py-1.5 rounded-lg text-xs font-bold border transition-all bg-gray-50 hover:bg-blue-50 text-gray-700 hover:text-blue-700 border-gray-200 hover:border-blue-300 flex items-center gap-1"
+                                data-service="{{ sn }}">
+                            <i class="fas fa-bolt text-yellow-400 text-[10px]"></i> {{ sn }}
+                        </button>
+                        {% endfor %}
+                        <input type="text" id="bc-custom-service" placeholder="Tên dịch vụ khác..."
+                               class="border border-dashed border-gray-300 rounded-lg px-3 py-1.5 text-xs text-gray-600 w-40 focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                        <button onclick="bcGetCard(document.getElementById('bc-custom-service').value)"
+                                class="px-3 py-1.5 rounded-lg text-xs font-bold border bg-gray-50 hover:bg-emerald-50 text-gray-700 hover:text-emerald-700 border-gray-200 hover:border-emerald-300 transition-all">
+                            <i class="fas fa-search"></i> Lấy
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Table -->
+                <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                    <table class="w-full text-sm border-collapse" id="bc-table">
+                        <thead>
+                            <tr class="bg-gray-50 text-gray-500 text-xs uppercase font-bold tracking-wider border-b border-gray-200">
+                                <th class="p-3 pl-4 text-left">Số thẻ</th>
+                                <th class="p-3 text-left">Ngân hàng</th>
+                                <th class="p-3 text-left">Chủ thẻ</th>
+                                <th class="p-3 text-left">Dịch vụ đã add</th>
+                                <th class="p-3 text-left">Ghi chú</th>
+                                <th class="p-3 text-center">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bc-tbody">
+                        {% for card in bank_cards %}
+                        <tr class="bc-row border-b border-gray-100 hover:bg-gray-50 transition-colors" data-card-id="{{ card.id }}">
+                            <td class="p-3 pl-4">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shrink-0">
+                                        <i class="fas fa-credit-card text-white text-xs"></i>
+                                    </div>
+                                    <div>
+                                        <div class="font-mono font-bold text-gray-800 text-sm tracking-widest">{{ card.card_number_masked }}</div>
+                                        <div class="text-[10px] text-gray-400 font-mono">{{ card.card_number }}</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="p-3">
+                                <span class="font-semibold text-gray-700">{{ card.bank_name or '—' }}</span>
+                            </td>
+                            <td class="p-3">
+                                <span class="text-gray-700">{{ card.card_holder or '—' }}</span>
+                            </td>
+                            <td class="p-3">
+                                <div class="flex flex-wrap gap-1 items-center" id="bc-services-{{ card.id }}">
+                                    {% for svc in card.services %}
+                                    <span class="bc-service-badge inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-[11px] font-bold px-2 py-0.5 rounded-full border border-blue-200 cursor-pointer hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors group"
+                                          title="Click để xoá {{ svc.service_name }}"
+                                          data-service-id="{{ svc.id }}"
+                                          data-card-id="{{ card.id }}"
+                                          onclick="bcRemoveService({{ card.id }}, {{ svc.id }}, '{{ svc.service_name|e }}', this)">
+                                        {{ svc.service_name }}
+                                        <i class="fas fa-times text-[9px] opacity-0 group-hover:opacity-100 transition-opacity"></i>
+                                    </span>
+                                    {% endfor %}
+                                    <button onclick="bcOpenAddService({{ card.id }})"
+                                            class="inline-flex items-center gap-1 text-[11px] font-bold text-gray-400 hover:text-emerald-600 px-2 py-0.5 rounded-full border border-dashed border-gray-200 hover:border-emerald-300 transition-all">
+                                        <i class="fas fa-plus text-[9px]"></i> Add
+                                    </button>
+                                </div>
+                            </td>
+                            <td class="p-3">
+                                <span class="text-xs text-gray-500 bc-notes-display" id="bc-note-display-{{ card.id }}"
+                                      onclick="bcStartEditNote({{ card.id }})" title="Click để sửa"
+                                      class="cursor-pointer hover:bg-gray-100 rounded px-1 py-0.5 transition-colors">
+                                    {{ card.notes or '' }}
+                                    {% if not card.notes %}<span class="text-gray-300 italic text-[11px]">+ Ghi chú</span>{% endif %}
+                                </span>
+                                <div id="bc-note-edit-{{ card.id }}" class="hidden">
+                                    <input type="text" id="bc-note-input-{{ card.id }}" value="{{ card.notes or '' }}"
+                                           placeholder="Nhập ghi chú..."
+                                           class="w-full text-xs border border-emerald-300 rounded px-2 py-1 focus:outline-none"
+                                           onblur="bcSaveNote({{ card.id }})"
+                                           onkeydown="if(event.key==='Enter')bcSaveNote({{ card.id }});if(event.key==='Escape')bcCancelNote({{ card.id }})">
+                                </div>
+                            </td>
+                            <td class="p-3 text-center">
+                                <div class="flex items-center justify-center gap-2">
+                                    <button onclick="bcOpenEdit({{ card.id }}, '{{ card.card_number|e }}', '{{ card.card_holder|e }}', '{{ card.bank_name|e }}', '{{ card.notes|e }}')"
+                                            class="text-gray-400 hover:text-blue-500 p-1 rounded transition-colors" title="Sửa thẻ">
+                                        <i class="fas fa-pen text-xs"></i>
+                                    </button>
+                                    <button onclick="bcDeleteCard({{ card.id }}, '{{ card.card_number_masked|e }}')"
+                                            class="text-gray-400 hover:text-red-500 p-1 rounded transition-colors" title="Xoá thẻ">
+                                        <i class="fas fa-trash-alt text-xs"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr id="bc-empty-row">
+                            <td colspan="6" class="py-12 text-center text-gray-400">
+                                <i class="fas fa-credit-card text-3xl mb-3 opacity-20 block"></i>
+                                <p class="text-sm">Chưa có thẻ nào. Hãy thêm thẻ ngân hàng đầu tiên!</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+            {% else %}
+                <div class="text-center py-20 text-gray-400">
+                    <i class="fas fa-lock text-4xl mb-4 opacity-30"></i>
+                    <p class="font-medium">Chỉ Admin mới có quyền truy cập.</p>
+                </div>
+            {% endif %}
+            </div><!-- end view-bankcard -->
+
             <!-- ── MODAL: THÊM TÀI KHOẢN ──────────────────────────── -->
             <div id="modal-nfx-add" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 hidden">
                 <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
@@ -1846,7 +2184,7 @@
 
     <script>
         function switchTab(id) {
-            ['view-todo', 'view-premium', 'view-standard', 'view-fetch', 'view-master', 'view-vault', 'view-users', 'view-activity', 'view-batch', 'view-netflix'].forEach(v => {
+            ['view-todo', 'view-premium', 'view-standard', 'view-fetch', 'view-master', 'view-vault', 'view-users', 'view-activity', 'view-batch', 'view-netflix', 'view-bankcard'].forEach(v => {
                 let el = document.getElementById(v);
                 if (el) el.classList.add('hidden');
             });
@@ -2290,7 +2628,7 @@
 
             let tabToOpen = 'view-todo';
 
-            if (hashTab && ['view-todo', 'view-premium', 'view-standard', 'view-fetch', 'view-master', 'view-vault', 'view-users', 'view-activity', 'view-batch', 'view-netflix'].includes(hashTab)) {
+            if (hashTab && ['view-todo', 'view-premium', 'view-standard', 'view-fetch', 'view-master', 'view-vault', 'view-users', 'view-activity', 'view-batch', 'view-netflix', 'view-bankcard'].includes(hashTab)) {
                 tabToOpen = hashTab;
             } else if (savedTab) {
                 tabToOpen = savedTab;
@@ -2612,6 +2950,172 @@
             });
         });
     </script>
+
+    <!-- ══ BANK CARD JS ══════════════════════════════════════════════ -->
+    <script>
+        let bcEditingCardId = null;
+        let bcAddServiceCardId = null;
+
+        async function bcGetCard(serviceName) {
+            serviceName = (serviceName || '').trim();
+            if (!serviceName) { alert('Vui lòng nhập tên dịch vụ.'); return; }
+            try {
+                const res = await fetch('/bank_cards/get_card', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ service_name: serviceName })
+                });
+                const data = await res.json();
+                if (!data.success) { alert(data.message || 'Không lấy được thẻ.'); return; }
+                const c = data.card;
+                document.getElementById('bc-result-service').textContent = serviceName;
+                document.getElementById('bc-result-service2').textContent = serviceName;
+                document.getElementById('bc-result-number').textContent = c.card_number;
+                document.getElementById('bc-result-holder').textContent = c.card_holder || '—';
+                document.getElementById('bc-result-bank').textContent = c.bank_name || '—';
+                const notesWrap = document.getElementById('bc-result-notes-wrap');
+                if (c.notes) {
+                    document.getElementById('bc-result-notes').textContent = c.notes;
+                    notesWrap.classList.remove('hidden');
+                } else {
+                    notesWrap.classList.add('hidden');
+                }
+                document.getElementById('modal-bc-result').classList.remove('hidden');
+                // Cập nhật badge dịch vụ trong bảng
+                const svcContainer = document.getElementById('bc-services-' + c.id);
+                if (svcContainer) {
+                    const addBtn = svcContainer.querySelector('button');
+                    const badge = bcMakeBadge(c.id, c.service_id, serviceName);
+                    svcContainer.insertBefore(badge, addBtn);
+                }
+            } catch(err) { alert('Lỗi kết nối. Vui lòng thử lại.'); }
+        }
+
+        function bcMakeBadge(cardId, serviceId, name) {
+            const span = document.createElement('span');
+            span.className = 'bc-service-badge inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-[11px] font-bold px-2 py-0.5 rounded-full border border-blue-200 cursor-pointer hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors group';
+            span.title = 'Click để xoá ' + name;
+            span.dataset.serviceId = serviceId;
+            span.dataset.cardId = cardId;
+            span.innerHTML = name + ' <i class="fas fa-times text-[9px] opacity-0 group-hover:opacity-100 transition-opacity"></i>';
+            span.onclick = function() { bcRemoveService(cardId, serviceId, name, this); };
+            return span;
+        }
+
+        function bcOpenAddService(cardId) {
+            bcAddServiceCardId = cardId;
+            document.getElementById('bc-svc-input').value = '';
+            document.querySelectorAll('.bc-svc-preset-btn').forEach(b => b.classList.remove('ring-2','ring-emerald-400','bg-emerald-50','text-emerald-700','border-emerald-300'));
+            document.getElementById('modal-bc-add-service').classList.remove('hidden');
+        }
+
+        function bcSelectPresetService(name) {
+            document.getElementById('bc-svc-input').value = name;
+            document.querySelectorAll('.bc-svc-preset-btn').forEach(b => {
+                if (b.dataset.svc === name) b.classList.add('ring-2','ring-emerald-400','bg-emerald-50','text-emerald-700','border-emerald-300');
+                else b.classList.remove('ring-2','ring-emerald-400','bg-emerald-50','text-emerald-700','border-emerald-300');
+            });
+        }
+
+        async function bcConfirmAddService() {
+            const name = document.getElementById('bc-svc-input').value.trim();
+            if (!name) { alert('Vui lòng nhập tên dịch vụ.'); return; }
+            const cardId = bcAddServiceCardId;
+            try {
+                const res = await fetch('/bank_cards/' + cardId + '/add_service', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ service_name: name })
+                });
+                const data = await res.json();
+                if (!data.success) { alert(data.message); return; }
+                const svcContainer = document.getElementById('bc-services-' + cardId);
+                if (svcContainer) {
+                    const addBtn = svcContainer.querySelector('button');
+                    svcContainer.insertBefore(bcMakeBadge(cardId, data.service_id, name), addBtn);
+                }
+                document.getElementById('modal-bc-add-service').classList.add('hidden');
+            } catch(e) { alert('Lỗi kết nối.'); }
+        }
+
+        async function bcRemoveService(cardId, serviceId, serviceName, el) {
+            if (!confirm('Xoá "' + serviceName + '" khỏi thẻ này?')) return;
+            try {
+                const res = await fetch('/bank_cards/' + cardId + '/remove_service/' + serviceId, { method: 'POST' });
+                const data = await res.json();
+                if (data.success) el.remove();
+                else alert(data.message);
+            } catch(e) { alert('Lỗi kết nối.'); }
+        }
+
+        function bcOpenEdit(cardId, number, holder, bank, notes) {
+            bcEditingCardId = cardId;
+            document.getElementById('bc-edit-number').value = number;
+            document.getElementById('bc-edit-holder').value = holder;
+            document.getElementById('bc-edit-bank').value = bank;
+            document.getElementById('bc-edit-notes').value = notes;
+            document.getElementById('modal-bc-edit').classList.remove('hidden');
+        }
+
+        async function bcSaveEdit() {
+            const cardId = bcEditingCardId;
+            const f = new FormData();
+            f.append('card_number', document.getElementById('bc-edit-number').value.trim());
+            f.append('card_holder', document.getElementById('bc-edit-holder').value.trim());
+            f.append('bank_name', document.getElementById('bc-edit-bank').value.trim());
+            f.append('notes', document.getElementById('bc-edit-notes').value.trim());
+            try {
+                const res = await fetch('/bank_cards/' + cardId + '/edit', { method: 'POST', body: f });
+                const data = await res.json();
+                if (data.success) { document.getElementById('modal-bc-edit').classList.add('hidden'); location.reload(); }
+                else alert(data.message);
+            } catch(e) { alert('Lỗi kết nối.'); }
+        }
+
+        async function bcDeleteCard(cardId, masked) {
+            if (!confirm('Xoá thẻ ' + masked + '? Dữ liệu dịch vụ của thẻ cũng sẽ bị xoá.')) return;
+            try {
+                const res = await fetch('/bank_cards/' + cardId + '/delete', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    const row = document.querySelector('tr[data-card-id="' + cardId + '"]');
+                    if (row) row.remove();
+                    const statEl = document.getElementById('bc-stat-total');
+                    if (statEl) statEl.textContent = document.querySelectorAll('.bc-row').length;
+                } else alert(data.message);
+            } catch(e) { alert('Lỗi kết nối.'); }
+        }
+
+        function bcStartEditNote(cardId) {
+            document.getElementById('bc-note-display-' + cardId).classList.add('hidden');
+            document.getElementById('bc-note-edit-' + cardId).classList.remove('hidden');
+            document.getElementById('bc-note-input-' + cardId).focus();
+        }
+
+        async function bcSaveNote(cardId) {
+            const val = document.getElementById('bc-note-input-' + cardId).value;
+            try {
+                await fetch('/bank_cards/' + cardId + '/update_notes', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ notes: val })
+                });
+                const display = document.getElementById('bc-note-display-' + cardId);
+                display.innerHTML = val || '<span class="text-gray-300 italic text-[11px]">+ Ghi chú</span>';
+                display.classList.remove('hidden');
+                document.getElementById('bc-note-edit-' + cardId).classList.add('hidden');
+            } catch(e) {}
+        }
+
+        function bcCancelNote(cardId) {
+            document.getElementById('bc-note-display-' + cardId).classList.remove('hidden');
+            document.getElementById('bc-note-edit-' + cardId).classList.add('hidden');
+        }
+
+        ['modal-bc-add','modal-bc-edit','modal-bc-result','modal-bc-add-service'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('click', function(e) { if (e.target === this) this.classList.add('hidden'); });
+        });
+    </script>
 </body>
 </html>
-

@@ -246,6 +246,44 @@ class NetflixProfile(db.Model):
     assigned_at = db.Column(db.DateTime, nullable=True)       # thời điểm được cấp
 
 
+class BankCard(db.Model):
+    """Thẻ ngân hàng dùng để đăng ký các dịch vụ streaming."""
+    id = db.Column(db.Integer, primary_key=True)
+    card_number = db.Column(db.String(20), nullable=False)       # Số thẻ đầy đủ
+    card_holder = db.Column(db.String(100), default='')           # Tên chủ thẻ
+    bank_name = db.Column(db.String(100), default='')             # Tên ngân hàng
+    notes = db.Column(db.Text, default='')                        # Ghi chú
+    active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    services = db.relationship('CardService', backref='card', lazy=True,
+                               cascade='all, delete-orphan',
+                               order_by='CardService.added_at')
+
+    @property
+    def card_number_masked(self):
+        """Hiển thị dạng **** **** **** 4321"""
+        n = self.card_number.replace(' ', '').replace('-', '')
+        if len(n) >= 4:
+            return '**** **** **** ' + n[-4:]
+        return self.card_number
+
+    def has_service(self, service_name):
+        return any(s.service_name.lower() == service_name.lower() for s in self.services)
+
+    @property
+    def service_names(self):
+        return [s.service_name for s in self.services]
+
+
+class CardService(db.Model):
+    """Dịch vụ đã được đăng ký/add vào thẻ ngân hàng."""
+    id = db.Column(db.Integer, primary_key=True)
+    card_id = db.Column(db.Integer, db.ForeignKey('bank_card.id'), nullable=False)
+    service_name = db.Column(db.String(100), nullable=False)   # Netflix, Spotify, ...
+    added_at = db.Column(db.DateTime, default=datetime.utcnow)
+    added_by_name = db.Column(db.String(100), default='')
+
+
 @login_manager.user_loader
 def load_user(user_id):
     return db.session.get(User, int(user_id))
@@ -1013,6 +1051,7 @@ def index():
     my_fetched_accounts = AccountVault.query.filter_by(assigned_to_user_id=current_user.id).order_by(AccountVault.assigned_at.desc()).all() if current_user.role != 'admin' else []
     users = User.query.order_by(User.created_at.desc()).all() if current_user.role == 'admin' else []
     activity_logs = ActivityLog.query.order_by(ActivityLog.created_at.desc()).limit(200).all() if current_user.role == 'admin' else []
+    bank_cards = BankCard.query.filter_by(active=True).order_by(BankCard.created_at.desc()).all() if current_user.role == 'admin' else []
 
     return render_template(
         'index.html',
@@ -1025,6 +1064,7 @@ def index():
         my_fetched_accounts=my_fetched_accounts,
         users=users,
         activity_logs=activity_logs,
+        bank_cards=bank_cards,
         today=date.today()
     )
 
@@ -2080,6 +2120,145 @@ def netflix_accounts_update_notes(acc_id):
     acc = NetflixAccount.query.get_or_404(acc_id)
     data = request.get_json(silent=True) or {}
     acc.notes = (data.get('notes') or '').strip()
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+# ─── BANK CARD MANAGEMENT ───────────────────────────────────────────
+
+PRESET_SERVICES = ['Netflix', 'Spotify', 'YouTube Premium', 'Apple TV+', 'Disney+', 'HBO Max', 'Amazon Prime']
+
+
+@app.route('/bank_cards/add', methods=['POST'])
+@login_required
+@admin_required
+def bank_card_add():
+    card_number = request.form.get('card_number', '').strip()
+    card_holder = request.form.get('card_holder', '').strip()
+    bank_name = request.form.get('bank_name', '').strip()
+    notes = request.form.get('notes', '').strip()
+    if not card_number:
+        flash('Vui lòng nhập số thẻ.', 'error')
+        return redirect(url_for('index') + '#view-bankcard')
+    card = BankCard(
+        card_number=card_number,
+        card_holder=card_holder,
+        bank_name=bank_name,
+        notes=notes
+    )
+    db.session.add(card)
+    db.session.commit()
+    log_activity('Thêm thẻ ngân hàng', f"Thẻ: {card.card_number_masked} | Bank: {bank_name} | Chủ: {card_holder}")
+    flash(f'Đã thêm thẻ {card.card_number_masked} thành công.', 'success')
+    return redirect(url_for('index') + '#view-bankcard')
+
+
+@app.route('/bank_cards/<int:card_id>/edit', methods=['POST'])
+@login_required
+@admin_required
+def bank_card_edit(card_id):
+    card = BankCard.query.get_or_404(card_id)
+    card.card_number = request.form.get('card_number', card.card_number).strip()
+    card.card_holder = request.form.get('card_holder', card.card_holder).strip()
+    card.bank_name = request.form.get('bank_name', card.bank_name).strip()
+    card.notes = request.form.get('notes', card.notes).strip()
+    db.session.commit()
+    log_activity('Sửa thẻ ngân hàng', f"ID: {card_id} | Thẻ: {card.card_number_masked}")
+    return jsonify({'success': True, 'message': 'Đã cập nhật thẻ.'})
+
+
+@app.route('/bank_cards/<int:card_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def bank_card_delete(card_id):
+    card = BankCard.query.get_or_404(card_id)
+    masked = card.card_number_masked
+    card.active = False
+    db.session.commit()
+    log_activity('Xoá thẻ ngân hàng', f"Thẻ: {masked}")
+    return jsonify({'success': True, 'message': f'Đã xoá thẻ {masked}.'})
+
+
+@app.route('/bank_cards/<int:card_id>/add_service', methods=['POST'])
+@login_required
+@admin_required
+def bank_card_add_service(card_id):
+    card = BankCard.query.get_or_404(card_id)
+    data = request.get_json(silent=True) or {}
+    service_name = (data.get('service_name') or '').strip()
+    if not service_name:
+        return jsonify({'success': False, 'message': 'Tên dịch vụ không được trống.'})
+    if card.has_service(service_name):
+        return jsonify({'success': False, 'message': f'Thẻ này đã add {service_name} rồi.'})
+    svc = CardService(card_id=card_id, service_name=service_name, added_by_name=current_user.full_name or current_user.username)
+    db.session.add(svc)
+    db.session.commit()
+    log_activity('Thêm dịch vụ vào thẻ', f"Thẻ: {card.card_number_masked} | DV: {service_name}")
+    return jsonify({'success': True, 'message': f'Đã thêm {service_name} vào thẻ.', 'service_id': svc.id})
+
+
+@app.route('/bank_cards/<int:card_id>/remove_service/<int:service_id>', methods=['POST'])
+@login_required
+@admin_required
+def bank_card_remove_service(card_id, service_id):
+    svc = CardService.query.filter_by(id=service_id, card_id=card_id).first_or_404()
+    name = svc.service_name
+    card = svc.card
+    db.session.delete(svc)
+    db.session.commit()
+    log_activity('Xoá dịch vụ khỏi thẻ', f"Thẻ: {card.card_number_masked} | DV: {name}")
+    return jsonify({'success': True, 'message': f'Đã xoá {name} khỏi thẻ.'})
+
+
+@app.route('/bank_cards/get_card', methods=['POST'])
+@login_required
+@admin_required
+def bank_card_get():
+    """Lấy thẻ chưa add dịch vụ, đánh dấu luôn."""
+    data = request.get_json(silent=True) or {}
+    service_name = (data.get('service_name') or '').strip()
+    if not service_name:
+        return jsonify({'success': False, 'message': 'Vui lòng chỉ định tên dịch vụ.'})
+
+    cards = BankCard.query.filter_by(active=True).order_by(BankCard.created_at.asc()).all()
+    chosen = None
+    for c in cards:
+        if not c.has_service(service_name):
+            chosen = c
+            break
+
+    if not chosen:
+        return jsonify({'success': False, 'message': f'Không còn thẻ nào chưa add {service_name}. Hãy thêm thẻ mới!'})
+
+    # Đánh dấu luôn
+    svc = CardService(card_id=chosen.id, service_name=service_name,
+                      added_by_name=current_user.full_name or current_user.username)
+    db.session.add(svc)
+    db.session.commit()
+    log_activity('Lấy thẻ cho dịch vụ', f"Thẻ: {chosen.card_number_masked} | DV: {service_name}")
+
+    return jsonify({
+        'success': True,
+        'card': {
+            'id': chosen.id,
+            'card_number': chosen.card_number,
+            'card_number_masked': chosen.card_number_masked,
+            'card_holder': chosen.card_holder,
+            'bank_name': chosen.bank_name,
+            'notes': chosen.notes,
+            'service_id': svc.id
+        },
+        'message': f'Đã lấy thẻ {chosen.card_number_masked} cho {service_name}.'
+    })
+
+
+@app.route('/bank_cards/<int:card_id>/update_notes', methods=['POST'])
+@login_required
+@admin_required
+def bank_card_update_notes(card_id):
+    card = BankCard.query.get_or_404(card_id)
+    data = request.get_json(silent=True) or {}
+    card.notes = (data.get('notes') or '').strip()
     db.session.commit()
     return jsonify({'success': True})
 
