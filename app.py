@@ -1601,7 +1601,7 @@ def get_household_link(email):
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
-            page.goto("https://zx4nxt_bot_1.opomail.store/login?key=e9ebba329687", wait_until="networkidle")
+            page.goto("https://zx4nxt_bot_1.opomail.store/login?key=6N7Z", wait_until="networkidle")
             time.sleep(2)
 
             # Fill email vào đúng ô Netflix Account Email
@@ -1713,7 +1713,7 @@ def get_signin_link(email):
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
-            page.goto("https://zx4nxt_bot_1.opomail.store/login?key=e9ebba329687", wait_until="networkidle")
+            page.goto("https://zx4nxt_bot_1.opomail.store/login?key=6N7Z", wait_until="networkidle")
             import time as _time
             _time.sleep(2)
             page.locator('#email-input').fill(email)
