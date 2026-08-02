@@ -145,6 +145,7 @@ class ToolKey(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     key = db.Column(db.String(8), unique=True, nullable=False)
     label = db.Column(db.String(100), default='')   # Ghi chú (tên khách, mục đích...)
+    bound_email = db.Column(db.String(150), default='')  # Email gắn cố định vào key (optional)
     expires_at = db.Column(db.DateTime, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     is_active = db.Column(db.Boolean, default=True)
@@ -1779,6 +1780,10 @@ def signin_start():
     tool_key = ToolKey.query.filter_by(key=key_input).first()
     if not tool_key or not tool_key.is_valid:
         return jsonify({'success': False, 'message': 'Key kh\u00f4ng t\u1ed3n t\u1ea1i ho\u1eb7c \u0111\u00e3 h\u1ebft h\u1ea1n, vui l\u00f2ng nh\u1eafn tin cho admin.'})
+    
+    # Kiểm tra bound email nếu có
+    if tool_key.bound_email and tool_key.bound_email != email.lower():
+        return jsonify({'success': False, 'message': f'Key này chỉ dùng được cho email: {tool_key.bound_email}'})
 
     task_id = str(uuid.uuid4())
     _signin_tasks[task_id] = {'status': 'pending', 'result': None}
@@ -1802,7 +1807,11 @@ def signin_check_key():
     tool_key = ToolKey.query.filter_by(key=key_input).first()
     if not tool_key or not tool_key.is_valid:
         return jsonify({'valid': False, 'message': 'Key kh\u00f4ng t\u1ed3n t\u1ea1i ho\u1eb7c \u0111\u00e3 h\u1ebft h\u1ea1n, vui l\u00f2ng nh\u1eafn tin cho admin.'})
-    return jsonify({'valid': True, 'days_left': tool_key.days_left})
+    return jsonify({
+        'valid': True,
+        'days_left': tool_key.days_left,
+        'bound_email': tool_key.bound_email or ''
+    })
 
 
 # --- Qu\u1ea3n l\u00fd Key (Admin only) ---
@@ -1822,6 +1831,7 @@ def admin_keys():
 def admin_create_key():
     label = (request.form.get('label') or '').strip()
     days = int(request.form.get('days', 30))
+    bound_email = (request.form.get('bound_email') or '').strip().lower()
 
     # Sinh key 8 s\u1ed1 ng\u1eabu nhi\u00ean, \u0111\u1ea3m b\u1ea3o kh\u00f4ng tr\u00f9ng
     while True:
@@ -1832,12 +1842,16 @@ def admin_create_key():
     tk = ToolKey(
         key=new_key,
         label=label,
+        bound_email=bound_email,
         expires_at=datetime.utcnow() + timedelta(days=days),
         is_active=True
     )
     db.session.add(tk)
     db.session.commit()
-    flash(f'Đã tạo key: {new_key} (hết hạn sau {days} ngày)', 'success')
+    msg = f'Đã tạo key: {new_key} (hết hạn sau {days} ngày)'
+    if bound_email:
+        msg += f' – gắn email: {bound_email}'
+    flash(msg, 'success')
     return redirect(url_for('admin_keys'))
 
 @app.route('/admin/keys/delete/<int:key_id>', methods=['POST'])

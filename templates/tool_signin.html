@@ -212,6 +212,10 @@
                 <input type="email" id="emailInput" placeholder="your@email.com" autocomplete="email"
                        style="padding-right:16px">
             </div>
+            <div id="emailLockedNote" style="display:none;margin-top:6px;font-size:11px;color:#60a5fa;display:flex;align-items:center;gap:5px;">
+                <i class="fas fa-lock" style="font-size:10px;"></i>
+                <span>Email đã được gắn sẵn vào key này</span>
+            </div>
         </div>
 
         <button class="btn" id="submitBtn" onclick="startSignInTask()">
@@ -268,6 +272,7 @@ let pollInterval = null;
 window.addEventListener('DOMContentLoaded', async function () {
     const params = new URLSearchParams(window.location.search);
     const keyFromUrl = params.get('key');
+    const emailFromUrl = params.get('email');
     if (!keyFromUrl) return; // Không có key → hiện bước 1 bình thường
 
     // Có key trong URL → kiểm tra ngay
@@ -275,7 +280,9 @@ window.addEventListener('DOMContentLoaded', async function () {
         const res = await fetch(`/tools/signin/check-key?key=${encodeURIComponent(keyFromUrl)}`);
         const data = await res.json();
         if (data.valid) {
-            enterStep2(keyFromUrl, data.days_left);
+            // Ưu tiên: bound_email từ server, sau đó email từ URL
+            const autoEmail = data.bound_email || emailFromUrl || '';
+            enterStep2(keyFromUrl, data.days_left, autoEmail);
         } else {
             showLocked(data.message);
         }
@@ -297,7 +304,7 @@ async function submitKey() {
         const res = await fetch(`/tools/signin/check-key?key=${encodeURIComponent(key)}`);
         const data = await res.json();
         if (data.valid) {
-            enterStep2(key, data.days_left);
+            enterStep2(key, data.days_left, data.bound_email || '');
         } else {
             btn.disabled = false;
             btn.innerHTML = '<i class="fas fa-arrow-right"></i> Tiếp Tục';
@@ -311,14 +318,31 @@ async function submitKey() {
     }
 }
 
-function enterStep2(key, daysLeft) {
+function enterStep2(key, daysLeft, boundEmail) {
     validKey = key;
     document.getElementById('step1').style.display = 'none';
     document.getElementById('step2').style.display = 'block';
     // Hiện key (che bớt giữa: chỉ hiện 2 ký tự đầu & cuối)
     const masked = key.slice(0,2) + '••••' + key.slice(-2);
     document.getElementById('keyDisplay').textContent = masked;
-    document.getElementById('emailInput').focus();
+
+    const emailInput = document.getElementById('emailInput');
+    const lockedNote = document.getElementById('emailLockedNote');
+
+    if (boundEmail) {
+        // Key có email gắn sẵn: tự điền và khóa lại
+        emailInput.value = boundEmail;
+        emailInput.readOnly = true;
+        emailInput.style.opacity = '0.7';
+        emailInput.style.cursor = 'not-allowed';
+        if (lockedNote) { lockedNote.style.display = 'flex'; }
+    } else {
+        emailInput.readOnly = false;
+        emailInput.style.opacity = '';
+        emailInput.style.cursor = '';
+        if (lockedNote) { lockedNote.style.display = 'none'; }
+        emailInput.focus();
+    }
     // Cập nhật URL không reload trang
     history.replaceState(null, '', `/tools/signin?key=${encodeURIComponent(key)}`);
 }
