@@ -400,6 +400,13 @@ with app.app_context():
         # netflix_account & netflix_profile: tạo tự động qua create_all, không cần migrate thêm cột
         print("[DB] NetflixAccount / NetflixProfile tables ready.")
 
+        if 'tool_key' in user_tables:
+            columns = [col['name'] for col in inspector.get_columns('tool_key')]
+            if 'bound_email' not in columns:
+                db.session.execute(text("ALTER TABLE tool_key ADD COLUMN bound_email VARCHAR(150) DEFAULT ''"))
+                db.session.commit()
+                print("[DB] Migrated: tool_key.bound_email")
+
         create_default_admin()
 
     else:
