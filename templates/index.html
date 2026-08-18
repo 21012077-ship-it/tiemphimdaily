@@ -411,7 +411,7 @@
                             </tr>
 
                             {# ── Accordion row: danh sách slot ── #}
-                            <tr id="accordion-{{ acc.id }}" class="hidden">
+                            <tr id="accordion-{{ acc.id }}" style="display:none">
                                 <td colspan="{% if current_user.role == 'admin' %}7{% else %}6{% endif %}" class="p-0">
                                     <div class="bg-gray-50/80 border-t border-gray-100 px-4 py-3">
                                         <table class="w-full text-xs">
@@ -524,8 +524,8 @@
                 function toggleAccordion(accId) {
                     const row = document.getElementById('accordion-' + accId);
                     const arrow = document.getElementById('arrow-' + accId);
-                    const isOpen = !row.classList.contains('hidden');
-                    row.classList.toggle('hidden', isOpen);
+                    const isOpen = row.style.display !== 'none';
+                    row.style.display = isOpen ? 'none' : '';
                     arrow.style.transform = isOpen ? '' : 'rotate(90deg)';
                 }
 
@@ -562,7 +562,12 @@
 
                         const show = matchSearch && matchFilter;
                         row.style.display = show ? '' : 'none';
-                        if (accordion) accordion.style.display = show ? accordion.style.display : 'none';
+                        if (accordion && !show) {
+                            // Ẩn & đóng accordion khi row bị filter out
+                            accordion.style.display = 'none';
+                            const arrow = document.getElementById('arrow-' + accId);
+                            if (arrow) arrow.style.transform = '';
+                        }
                         if (show) visible++;
                     });
 
@@ -1108,10 +1113,33 @@
                 </button>
             </div>
             <form action="/bank_cards/add" method="POST" class="space-y-4">
+                <!-- Ô nhập nhanh 1 dòng -->
+                <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+                    <label class="text-xs font-bold text-emerald-700 block mb-1.5">
+                        <i class="fas fa-bolt mr-1"></i>Nhập nhanh 1 dòng <span class="font-normal text-emerald-600">(số thẻ &nbsp;CVV &nbsp;MM/YY)</span>
+                    </label>
+                    <input type="text" id="bc-quick-input"
+                           placeholder="VD: 4780 9701 7353 9448 587 7/34"
+                           oninput="bcParseQuickInput(this.value)"
+                           class="w-full border border-emerald-300 rounded-lg px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-white">
+                    <p class="text-[10px] text-emerald-500 mt-1">Nhập xong sẽ tự điền vào các ô phía dưới</p>
+                </div>
                 <div>
                     <label class="text-xs font-bold text-gray-600 block mb-1">Số thẻ <span class="text-red-500">*</span></label>
-                    <input type="text" name="card_number" placeholder="VD: 4111 1111 1111 1111" required
+                    <input type="text" name="card_number" id="bc-add-number" placeholder="VD: 4111 1111 1111 1111" required
                            class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-xs font-bold text-gray-600 block mb-1">CVV/CVC</label>
+                        <input type="text" name="cvv" id="bc-add-cvv" placeholder="VD: 587" maxlength="4"
+                               class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-gray-600 block mb-1">Hết hạn (MM/YY)</label>
+                        <input type="text" name="expire_date" id="bc-add-expire" placeholder="VD: 07/34" maxlength="5"
+                               class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                    </div>
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div>
@@ -1737,7 +1765,8 @@
                         <thead>
                             <tr class="bg-gray-50 text-gray-500 text-xs uppercase font-bold tracking-wider border-b border-gray-200">
                                 <th class="p-3 pl-4 text-left">Số thẻ</th>
-                                <th class="p-3 text-left">Ngân hàng</th>
+                                <th class="p-3 text-left">CVV / Hết hạn</th>
+                                 <th class="p-3 text-left">Ngân hàng</th>
                                 <th class="p-3 text-left">Chủ thẻ</th>
                                 <th class="p-3 text-left">Dịch vụ đã add</th>
                                 <th class="p-3 text-left">Ghi chú</th>
@@ -1756,6 +1785,23 @@
                                         <div class="font-mono font-bold text-gray-800 text-sm tracking-widest">{{ card.card_number_masked }}</div>
                                         <div class="text-[10px] text-gray-400 font-mono">{{ card.card_number }}</div>
                                     </div>
+                                </div>
+                            </td>
+                            <td class="p-3">
+                                <div class="flex flex-col gap-0.5">
+                                    {% if card.cvv %}
+                                    <div class="flex items-center gap-1">
+                                        <span class="text-[10px] text-gray-400 uppercase">CVV</span>
+                                        <span class="font-mono font-bold text-gray-800 text-xs bg-gray-100 px-1.5 py-0.5 rounded tracking-widest">{{ card.cvv }}</span>
+                                    </div>
+                                    {% endif %}
+                                    {% if card.expire_date %}
+                                    <div class="flex items-center gap-1">
+                                        <span class="text-[10px] text-gray-400 uppercase">HH</span>
+                                        <span class="font-mono text-xs text-emerald-700 font-bold">{{ card.expire_date }}</span>
+                                    </div>
+                                    {% endif %}
+                                    {% if not card.cvv and not card.expire_date %}<span class="text-gray-300 text-xs">—</span>{% endif %}
                                 </div>
                             </td>
                             <td class="p-3">
@@ -1799,7 +1845,7 @@
                             </td>
                             <td class="p-3 text-center">
                                 <div class="flex items-center justify-center gap-2">
-                                    <button onclick="bcOpenEdit({{ card.id }}, '{{ card.card_number|e }}', '{{ card.card_holder|e }}', '{{ card.bank_name|e }}', '{{ card.notes|e }}')"
+                                    <button onclick="bcOpenEdit({{ card.id }}, '{{ card.card_number|e }}', '{{ card.cvv|e }}', '{{ card.expire_date|e }}', '{{ card.card_holder|e }}', '{{ card.bank_name|e }}', '{{ card.notes|e }}')"
                                             class="text-gray-400 hover:text-blue-500 p-1 rounded transition-colors" title="Sửa thẻ">
                                         <i class="fas fa-pen text-xs"></i>
                                     </button>
@@ -3048,9 +3094,45 @@
             } catch(e) { alert('Lỗi kết nối.'); }
         }
 
-        function bcOpenEdit(cardId, number, holder, bank, notes) {
+        function bcParseQuickInput(val) {
+            const raw = val.trim();
+            if (!raw) return;
+            const dateRx = /(\d{1,2})\/(\d{2,4})/;
+            const dateMatch = raw.match(dateRx);
+            let expStr = '';
+            let remaining = raw;
+            if (dateMatch) {
+                const m = dateMatch[1].padStart(2,'0');
+                const y = dateMatch[2].slice(-2);
+                expStr = m + '/' + y;
+                remaining = raw.replace(dateMatch[0], '').trim();
+            }
+            const tokens = remaining.replace(/[-]/g,'').split(/\s+/).filter(t => /^\d+$/.test(t));
+            let cardDigits = '';
+            let cvvStr = '';
+            for (let i = 0; i < tokens.length; i++) {
+                if (cardDigits.length < 16) {
+                    const need = 16 - cardDigits.length;
+                    cardDigits += tokens[i].slice(0, need);
+                    if (tokens[i].length > need) cvvStr = tokens[i].slice(need);
+                } else if (!cvvStr && tokens[i].length <= 4) {
+                    cvvStr = tokens[i];
+                }
+            }
+            if (cardDigits.length >= 12) {
+                const fmt = cardDigits.match(/.{1,4}/g).join(' ');
+                const el = document.getElementById('bc-add-number');
+                if (el) el.value = fmt;
+            }
+            if (cvvStr) { const el = document.getElementById('bc-add-cvv'); if (el) el.value = cvvStr; }
+            if (expStr) { const el = document.getElementById('bc-add-expire'); if (el) el.value = expStr; }
+        }
+
+        function bcOpenEdit(cardId, number, cvv, expire, holder, bank, notes) {
             bcEditingCardId = cardId;
             document.getElementById('bc-edit-number').value = number;
+            document.getElementById('bc-edit-cvv').value = cvv || '';
+            document.getElementById('bc-edit-expire').value = expire || '';
             document.getElementById('bc-edit-holder').value = holder;
             document.getElementById('bc-edit-bank').value = bank;
             document.getElementById('bc-edit-notes').value = notes;
@@ -3061,6 +3143,8 @@
             const cardId = bcEditingCardId;
             const f = new FormData();
             f.append('card_number', document.getElementById('bc-edit-number').value.trim());
+            f.append('cvv', document.getElementById('bc-edit-cvv').value.trim());
+            f.append('expire_date', document.getElementById('bc-edit-expire').value.trim());
             f.append('card_holder', document.getElementById('bc-edit-holder').value.trim());
             f.append('bank_name', document.getElementById('bc-edit-bank').value.trim());
             f.append('notes', document.getElementById('bc-edit-notes').value.trim());
