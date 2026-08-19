@@ -253,6 +253,8 @@ class BankCard(db.Model):
     card_number = db.Column(db.String(20), nullable=False)       # Số thẻ đầy đủ
     card_holder = db.Column(db.String(100), default='')           # Tên chủ thẻ
     bank_name = db.Column(db.String(100), default='')             # Tên ngân hàng
+    cvv = db.Column(db.String(10), default='')                    # Mã CVV/CVC
+    expire_date = db.Column(db.String(10), default='')            # Ngày hết hạn (MM/YY)
     notes = db.Column(db.Text, default='')                        # Ghi chú
     active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -406,6 +408,17 @@ with app.app_context():
                 db.session.execute(text("ALTER TABLE tool_key ADD COLUMN bound_email VARCHAR(150) DEFAULT ''"))
                 db.session.commit()
                 print("[DB] Migrated: tool_key.bound_email")
+
+        if 'bank_card' in user_tables:
+            columns = [col['name'] for col in inspector.get_columns('bank_card')]
+            if 'cvv' not in columns:
+                db.session.execute(text("ALTER TABLE bank_card ADD COLUMN cvv VARCHAR(10) DEFAULT ''"))
+                db.session.commit()
+                print("[DB] Migrated: bank_card.cvv")
+            if 'expire_date' not in columns:
+                db.session.execute(text("ALTER TABLE bank_card ADD COLUMN expire_date VARCHAR(10) DEFAULT ''"))
+                db.session.commit()
+                print("[DB] Migrated: bank_card.expire_date")
 
         create_default_admin()
 
@@ -2157,6 +2170,8 @@ def bank_card_add():
     card_number = request.form.get('card_number', '').strip()
     card_holder = request.form.get('card_holder', '').strip()
     bank_name = request.form.get('bank_name', '').strip()
+    cvv = request.form.get('cvv', '').strip()
+    expire_date = request.form.get('expire_date', '').strip()
     notes = request.form.get('notes', '').strip()
     if not card_number:
         flash('Vui lòng nhập số thẻ.', 'error')
@@ -2165,6 +2180,8 @@ def bank_card_add():
         card_number=card_number,
         card_holder=card_holder,
         bank_name=bank_name,
+        cvv=cvv,
+        expire_date=expire_date,
         notes=notes
     )
     db.session.add(card)
@@ -2182,6 +2199,8 @@ def bank_card_edit(card_id):
     card.card_number = request.form.get('card_number', card.card_number).strip()
     card.card_holder = request.form.get('card_holder', card.card_holder).strip()
     card.bank_name = request.form.get('bank_name', card.bank_name).strip()
+    card.cvv = request.form.get('cvv', card.cvv or '').strip()
+    card.expire_date = request.form.get('expire_date', card.expire_date or '').strip()
     card.notes = request.form.get('notes', card.notes).strip()
     db.session.commit()
     log_activity('Sửa thẻ ngân hàng', f"ID: {card_id} | Thẻ: {card.card_number_masked}")
