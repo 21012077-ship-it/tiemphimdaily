@@ -7,3 +7,4 @@ playwright
 apscheduler
 psycopg2-binary
 requests
+psycopg[binary]>=3.2,<4
