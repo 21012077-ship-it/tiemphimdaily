@@ -114,6 +114,8 @@ class AccessTests(unittest.TestCase):
             result = client.post("/fetch_account", json={"plan": "Standard"})
             self.assertEqual(result.status_code, 503)
             self.assertFalse(result.get_json()["success"])
+            self.assertIn("chưa cấp tài khoản", result.get_json()["message"])
+            self.assertEqual(result.get_json()["subscription_label"], "Chưa xác minh được")
             offline.assert_called_once()
             self.assertIn("inventory;dur=", result.headers["Server-Timing"])
             self.assertIn("check;dur=", result.headers["Server-Timing"])
@@ -125,9 +127,89 @@ class AccessTests(unittest.TestCase):
             for item_id in ids:
                 row = m.db.session.get(m.AccountVault, item_id)
                 self.assertEqual(row.status, "Offline")
+                self.assertEqual(row.allocation_label, "Chưa cấp")
+                if item_id == ids[0]:
+                    self.assertEqual(row.subscription_label, "Chưa xác minh được")
+                else:
+                    self.assertEqual(row.subscription_label, "Chưa có kết quả")
                 self.assertIsNone(row.last_checked_at)
                 self.assertIsNone(row.assigned_to_user_id)
                 m.db.session.delete(row)
+            m.db.session.commit()
+
+    def test_legacy_allocation_is_independent_of_subscription(self):
+        m = self.module
+        with self.web.app_context():
+            allocated = m.AccountVault(status="Đã Live", assigned_to="khách cũ")
+            unchecked = m.AccountVault(status="Chưa Check")
+            m.db.session.add_all([allocated, unchecked])
+            m.db.session.commit()
+            candidates = m.AccountVault.unassigned_candidates().all()
+            self.assertNotIn(allocated, candidates)
+            self.assertIn(unchecked, candidates)
+            self.assertEqual(allocated.allocation_label, "Đã cấp")
+            self.assertEqual(allocated.subscription_label, "Có gói ở lần kiểm tra")
+            self.assertEqual(unchecked.subscription_label, "Chưa có kết quả")
+            allocated.record_check("UNKNOWN")
+            self.assertEqual(allocated.allocation_label, "Đã cấp")
+            self.assertEqual(allocated.subscription_label, "Chưa xác minh được")
+            m.db.session.delete(allocated)
+            m.db.session.delete(unchecked)
+            m.db.session.commit()
+
+    def test_manual_check_persists_result_without_reopening_assigned_stock(self):
+        m = self.module
+        client = self.web.test_client()
+        client.post("/login", data={"username": "test-admin", "password": self.password})
+        with self.web.app_context():
+            row = m.AccountVault(plan="Standard", status="Đã Cấp", assigned_to="người nhận")
+            m.db.session.add(row)
+            m.db.session.commit()
+            row_id = row.id
+            self.assertEqual(row.subscription_label, "Chưa có kết quả")
+        with patch.object(m, "check_netflix_cookie_live", return_value=("EXPIRED", "Gói tạm ngưng")):
+            response = client.post(f"/check_account/{row_id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json["account"]["allocation_label"], "Đã cấp")
+        with self.web.app_context():
+            row = m.db.session.get(m.AccountVault, row_id)
+            self.assertEqual(row.status, "Đã Cấp")
+            self.assertEqual(row.subscription_label, "Hết hạn hoặc tạm ngưng")
+            row.release_allocation()
+            self.assertEqual(row.allocation_label, "Chưa cấp")
+            self.assertEqual(row.subscription_label, "Hết hạn hoặc tạm ngưng")
+            self.assertNotIn(row, m.AccountVault.unassigned_candidates().all())
+            m.db.session.delete(row)
+            m.db.session.commit()
+
+    def test_allocation_change_during_check_preserves_new_owner(self):
+        m = self.module
+        client = self.web.test_client()
+        client.post("/login", data={"username": "test-alice", "password": self.password})
+        with self.web.app_context():
+            row = m.AccountVault(plan="Standard", status="Chưa Check")
+            m.db.session.add(row)
+            m.db.session.commit()
+            row_id = row.id
+            bob_id = m.User.query.filter_by(username="test-bob").one().id
+
+        def another_owner_during_check(_):
+            with self.web.app_context():
+                row = m.db.session.get(m.AccountVault, row_id)
+                row.assigned_to_user_id = bob_id
+                m.db.session.commit()
+            return "UNKNOWN", "Chưa xác minh được trạng thái gói."
+
+        self.assertEqual(client.post(f"/assign_account/{row_id}", json={}).status_code, 403)
+        with patch.object(m, "check_netflix_cookie_live", side_effect=another_owner_during_check):
+            response = client.post("/fetch_account", json={"plan": "Standard"})
+        self.assertEqual(response.status_code, 409)
+        self.assertNotIn("account", response.json)
+        with self.web.app_context():
+            row = m.db.session.get(m.AccountVault, row_id)
+            self.assertEqual(row.assigned_to_user_id, bob_id)
+            self.assertEqual(row.subscription_label, "Chưa có kết quả")
+            m.db.session.delete(row)
             m.db.session.commit()
 
     def test_household_uses_official_verification(self):

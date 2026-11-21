@@ -8,6 +8,7 @@ from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, abort, after_this_request
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.engine import URL
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.exc import IntegrityError
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -112,17 +113,75 @@ class PremiumSlot(db.Model):
 
 
 class AccountVault(db.Model):
+    _stock_status_by_check = {'LIVE': 'Đã Live', 'EXPIRED': 'Hết hạn', 'DEAD': 'Dead'}
+    _check_by_legacy_status = {status: result for result, status in _stock_status_by_check.items()}
+
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(100), unique=True)
     password = db.Column(db.String(100))
     plan = db.Column(db.String(50))
     cookies = db.Column(db.Text)
     status = db.Column(db.String(50), default="Chưa Check")
+    subscription_check = db.Column(db.String(20), nullable=True)
     assigned_to = db.Column(db.String(100), default="")
     assigned_to_user_id = db.Column(db.Integer, nullable=True)
     assigned_at = db.Column(db.DateTime, nullable=True)
     last_checked_at = db.Column(db.DateTime, nullable=True)
     next_recheck_at = db.Column(db.DateTime, nullable=True)
+
+    @hybrid_property
+    def is_allocated(self):
+        return (self.status == 'Đã Cấp' or self.assigned_to_user_id is not None
+                or self.assigned_at is not None or bool((self.assigned_to or '').strip()))
+
+    @is_allocated.expression
+    def is_allocated(cls):
+        return db.or_(
+            db.func.coalesce(cls.status, '') == 'Đã Cấp',
+            cls.assigned_to_user_id.isnot(None),
+            cls.assigned_at.isnot(None),
+            db.func.trim(db.func.coalesce(cls.assigned_to, '')) != '',
+        )
+
+    @property
+    def allocation_label(self):
+        return 'Đã cấp' if self.is_allocated else 'Chưa cấp'
+
+    @property
+    def last_subscription_result(self):
+        # Old rows may only have the shared stock status. Allocation alone says
+        # nothing about the subscription, including for legacy TV assignments.
+        return self.subscription_check or self._check_by_legacy_status.get(self.status)
+
+    @property
+    def subscription_label(self):
+        return {
+            None: 'Chưa có kết quả',
+            'LIVE': 'Có gói ở lần kiểm tra',
+            'EXPIRED': 'Hết hạn hoặc tạm ngưng',
+        }.get(self.last_subscription_result, 'Chưa xác minh được')
+
+    def record_check(self, result):
+        self.subscription_check = result
+        if result in self._stock_status_by_check:
+            self.last_checked_at = datetime.now()
+            if not self.is_allocated:
+                self.status = self._stock_status_by_check[result]
+
+    def release_allocation(self):
+        self.subscription_check = self.last_subscription_result
+        if self.subscription_check in ('EXPIRED', 'DEAD'):
+            self.status = self._stock_status_by_check[self.subscription_check]
+        elif self.status not in ('Hết hạn', 'Dead'):
+            self.status = 'Offline'
+        self.assigned_to = ''
+        self.assigned_to_user_id = None
+        self.assigned_at = None
+        self.next_recheck_at = None
+
+    @classmethod
+    def unassigned_candidates(cls):
+        return cls.query.filter(~cls.is_allocated, cls.status.in_(['Offline', 'Chưa Check', 'Đã Live']))
 
     @property
     def days_until_resend(self):
@@ -356,6 +415,11 @@ with app.app_context():
 
         if 'account_vault' in user_tables:
             columns = [col['name'] for col in inspector.get_columns('account_vault')]
+            if 'subscription_check' not in columns:
+                if db.engine.dialect.name == 'postgresql':
+                    db.session.execute(text("ALTER TABLE account_vault ADD COLUMN IF NOT EXISTS subscription_check VARCHAR(20)"))
+                else:
+                    db.session.execute(text("ALTER TABLE account_vault ADD COLUMN subscription_check VARCHAR(20)"))
             if 'assigned_to' not in columns:
                 db.session.execute(text("ALTER TABLE account_vault ADD COLUMN assigned_to VARCHAR(100) DEFAULT ''"))
             if 'assigned_to_user_id' not in columns:
@@ -510,6 +574,8 @@ def format_vault_status(acc, include_secrets=False):
         "plan": acc.plan,
         "cookies": cookies,
         "status": acc.status,
+        "allocation_label": acc.allocation_label,
+        "subscription_label": acc.subscription_label,
         "assigned_to": acc.assigned_to or "",
         "assigned_at": acc.assigned_at.strftime('%d/%m/%Y %H:%M') if acc.assigned_at else "",
         "last_checked_at": acc.last_checked_at.strftime('%d/%m/%Y %H:%M') if acc.last_checked_at else "",
@@ -798,7 +864,7 @@ def check_netflix_cookie_live(cookie_text):
                     return 'LIVE', "Cookie hoạt động & Đang có gói cước" # <-- BÁO LIVE
                     
                 except Exception:
-                    return 'UNKNOWN', "Chưa xác minh được thời hạn của tài khoản."
+                    return 'UNKNOWN', "Chưa xác minh được trạng thái gói."
 
             browser.close()
             return 'UNKNOWN', "Chưa xác định được trạng thái tài khoản."
@@ -882,7 +948,7 @@ def auto_recheck_assigned_accounts():
     with app.app_context():
         now = datetime.now()
         due_accounts = AccountVault.query.filter(
-            AccountVault.status.in_(["Đã Cấp", "Đã Live"]),
+            AccountVault.is_allocated,
             AccountVault.next_recheck_at.isnot(None),
             AccountVault.next_recheck_at <= now
         ).all()
@@ -891,12 +957,7 @@ def auto_recheck_assigned_accounts():
             return
 
         for acc in due_accounts:
-            acc.status = "Offline"
-            acc.assigned_to = ""
-            acc.assigned_to_user_id = None
-            acc.assigned_at = None
-            acc.last_checked_at = None
-            acc.next_recheck_at = None
+            acc.release_allocation()
 
         db.session.commit()
         app.logger.info("Reset %d expired account assignments", len(due_accounts))
@@ -1052,17 +1113,14 @@ def index():
 
     vault_accounts = AccountVault.query.order_by(AccountVault.id.desc()).all() if current_user.role == 'admin' else []
     
-    vault_stats = {
-        'online': 0, 'offline': 0, 'premium': 0, 'standard': 0, 'dead': 0
-    }
-    if current_user.role == 'admin':
-        for acc in vault_accounts:
-            if 'Premium' in acc.plan: vault_stats['premium'] += 1
-            elif 'Standard' in acc.plan: vault_stats['standard'] += 1
-            
-            if acc.status in ['Đã Live', 'Đã Cấp']: vault_stats['online'] += 1
-            elif acc.status in ['Offline', 'Chưa Check']: vault_stats['offline'] += 1
-            else: vault_stats['dead'] += 1
+    vault_stats = {'assigned': 0, 'unassigned': 0, 'premium': 0, 'standard': 0}
+    for acc in vault_accounts:
+        vault_stats['assigned' if acc.is_allocated else 'unassigned'] += 1
+        plan = acc.plan or ''
+        if 'Premium' in plan:
+            vault_stats['premium'] += 1
+        elif 'Standard' in plan:
+            vault_stats['standard'] += 1
 
     my_fetched_accounts = AccountVault.query.filter_by(assigned_to_user_id=current_user.id).order_by(AccountVault.assigned_at.desc()).all() if current_user.role != 'admin' else []
     users = User.query.order_by(User.created_at.desc()).all() if current_user.role == 'admin' else []
@@ -1107,6 +1165,7 @@ def reset_vault(item_id):
         return jsonify({'success': False, 'message': 'Không tìm thấy tài khoản.'}), 404
 
     acc.status = "Chưa Check"
+    acc.subscription_check = None
     acc.last_checked_at = None
     acc.assigned_to = ""
     acc.assigned_to_user_id = None
@@ -1370,25 +1429,21 @@ def delete_vault(item_id):
 @login_required
 @admin_required
 def check_account(item_id):
-    acc = AccountVault.query.get(item_id)
+    acc = db.session.get(AccountVault, item_id)
     if not acc:
         return jsonify({'success': False, 'message': 'Không tìm thấy tài khoản.'}), 404
 
     status_code, check_msg = check_netflix_cookie_live(acc.cookies)
-    if status_code == 'UNKNOWN':
-        return jsonify(success=False, message=check_msg), 503
-    acc.last_checked_at = datetime.now()
-    
-    # Gán trạng thái vào DB tương ứng
-    if status_code == 'LIVE':
-        acc.status = 'Đã Live'
-    elif status_code == 'EXPIRED':
-        acc.status = 'Hết hạn'
-    else:
-        acc.status = 'Dead'
-        
+    acc = db.session.get(AccountVault, item_id, populate_existing=True, with_for_update=True)
+    if acc is None:
+        abort(404)
+    acc.record_check(status_code)
     db.session.commit()
-    return jsonify({'success': True, 'message': f'{acc.status} - {check_msg}', 'account': format_vault_status(acc)})
+    if status_code == 'UNKNOWN':
+        return jsonify(success=False, account_id=acc.id, subscription_label=acc.subscription_label,
+                       message=f"{check_msg} Cấp phát: {acc.allocation_label.lower()}."), 503
+    return jsonify(success=True, message=f"{check_msg} Cấp phát: {acc.allocation_label.lower()}.",
+                   account=format_vault_status(acc))
 
 
 def get_netflix_login_url(cookie_text):
@@ -1493,10 +1548,7 @@ def fetch_account():
         data = request.get_json(silent=True) or {}
         plan = (data.get('plan') or '').strip()
 
-        query = AccountVault.query.filter(AccountVault.status.in_(['Offline', 'Chưa Check', 'Đã Live']))
-
-        if current_user.role != 'admin':
-            query = query.filter((AccountVault.assigned_to_user_id.is_(None)) | (AccountVault.assigned_to_user_id == current_user.id))
+        query = AccountVault.unassigned_candidates()
 
         if plan: query = query.filter(AccountVault.plan.ilike(f"%{plan}%"))
 
@@ -1508,12 +1560,21 @@ def fetch_account():
             return jsonify({'success': False, 'message': 'Không còn tài khoản phù hợp trong kho.'}), 404
 
         for acc in candidates:
+            candidate_id = acc.id
             check_started = time.perf_counter()
             status_code, check_msg = check_netflix_cookie_live(acc.cookies)
             durations['check'] = durations.get('check', 0) + (time.perf_counter() - check_started)
+            # Check ownership again after waiting for the external service.
+            acc = (AccountVault.unassigned_candidates().filter_by(id=candidate_id)
+                   .populate_existing().with_for_update().first())
+            if acc is None:
+                return jsonify(success=False, message="Trạng thái kho đã thay đổi. Yêu cầu này chưa cấp tài khoản."), 409
+            acc.record_check(status_code)
             if status_code == 'UNKNOWN':
-                return jsonify(success=False, message=f"{check_msg} Đã dừng yêu cầu lấy tài khoản."), 503
-            acc.last_checked_at = datetime.now()
+                db.session.commit()
+                return jsonify(success=False, account_id=acc.id if current_user.role == 'admin' else None,
+                               subscription_label=acc.subscription_label,
+                               message=f"{check_msg} Yêu cầu này chưa cấp tài khoản."), 503
 
             if status_code == 'LIVE':
                 now = datetime.now()
@@ -1536,13 +1597,7 @@ def fetch_account():
                     'login_url': login_url or ''
                 })
             
-            # Nếu phát hiện hết hạn hoặc chết thì đánh dấu vào DB rồi lặp qua acc tiếp theo
-            elif status_code == 'EXPIRED':
-                acc.status = 'Hết hạn'
-                db.session.commit()
-            else:
-                acc.status = 'Dead'
-                db.session.commit()
+            db.session.commit()
 
         return jsonify({'success': False, 'message': 'Đã quét qua các acc nhưng đều Dead hoặc Hết hạn. Hãy nạp thêm kho!'}), 404
 
@@ -1559,10 +1614,7 @@ def login_tv_code():
     if len(tv_code) != 8:
         return jsonify({'success': False, 'message': 'Mã TV phải có đúng 8 ký tự.'})
 
-    query = AccountVault.query.filter(AccountVault.status.in_(['Offline', 'Chưa Check', 'Đã Live']))
-
-    if current_user.role != 'admin':
-        query = query.filter((AccountVault.assigned_to_user_id.is_(None)) | (AccountVault.assigned_to_user_id == current_user.id))
+    query = AccountVault.unassigned_candidates()
 
     candidates = query.order_by(AccountVault.id.asc()).all()
 
@@ -1574,6 +1626,7 @@ def login_tv_code():
 
         if is_success:
             now = datetime.now()
+            acc.subscription_check = acc.last_subscription_result
             acc.status = 'Đã Cấp'
             acc.last_checked_at = now
             acc.assigned_to_user_id = current_user.id
@@ -1589,6 +1642,7 @@ def login_tv_code():
             })
 
         elif "chết" in msg.lower() or "login" in msg.lower():
+            acc.subscription_check = acc.last_subscription_result
             acc.status = 'Dead'
             acc.last_checked_at = datetime.now()
             db.session.commit()
@@ -1603,11 +1657,13 @@ def login_tv_code():
 @login_required
 @not_tv_required
 def assign_account(item_id):
-    acc = AccountVault.query.get(item_id)
+    acc = db.session.get(AccountVault, item_id, with_for_update=True)
     if not acc:
         return jsonify({'success': False, 'message': 'Không tìm thấy tài khoản.'}), 404
-    if acc.status == 'Đã Cấp' and acc.assigned_to_user_id not in [None, current_user.id]:
+    if acc.is_allocated and acc.assigned_to_user_id != current_user.id:
         return jsonify({'success': False, 'message': 'Tài khoản này đã được cấp cho người khác.'}), 400
+    if current_user.role != 'admin' and acc.assigned_to_user_id != current_user.id:
+        return jsonify(success=False, message="Tài khoản này chưa được cấp cho bạn."), 403
 
     data = request.get_json(silent=True) or {}
     assigned_to = (data.get('assigned_to') or '').strip()
@@ -1617,6 +1673,7 @@ def assign_account(item_id):
         assigned_to = assigned_to or (current_user.full_name or current_user.username)
 
     now = datetime.now()
+    acc.subscription_check = acc.last_subscription_result
     acc.status = 'Đã Cấp'
     acc.assigned_to = assigned_to
     acc.assigned_to_user_id = current_user.id

@@ -754,7 +754,8 @@
                                         <th class="px-4 py-3 text-left">Người nhận</th>
                                         <th class="px-4 py-3 text-left">Lúc lấy</th>
                                         <th class="px-4 py-3 text-left">Được gửi lại sau</th>
-                                        <th class="px-4 py-3 text-left">Trạng thái</th>
+                                        <th class="px-4 py-3 text-left">Cấp phát</th>
+                                        <th class="px-4 py-3 text-left">Trạng thái gói</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -785,10 +786,11 @@
                                             <span class="text-gray-400 text-xs">Chưa có lịch</span>
                                         {% endif %}
                                     </td>
-                                    <td class="px-4 py-3">{{ acc.status }}</td>
+                                    <td class="px-4 py-3">{{ acc.allocation_label }}</td>
+                                    <td class="px-4 py-3">{{ acc.subscription_label }}</td>
                                 </tr>
                                 {% else %}
-                                <tr><td colspan="6" class="px-4 py-8 text-center text-gray-400">Bạn chưa lấy tài khoản nào.</td></tr>
+                                <tr><td colspan="7" class="px-4 py-8 text-center text-gray-400">Bạn chưa lấy tài khoản nào.</td></tr>
                                 {% endfor %}
                                 </tbody>
                             </table>
@@ -924,12 +926,12 @@
                         <div class="text-2xl font-black text-gray-800">{{ vault_accounts|length }}</div>
                     </div>
                     <div class="bg-green-50 border border-green-200 rounded-xl p-4 shadow-sm text-center">
-                        <div class="text-xs text-green-600 font-bold uppercase tracking-wider mb-1">Online</div>
-                        <div class="text-2xl font-black text-green-700">{{ vault_stats.online if vault_stats else 0 }}</div>
+                        <div class="text-xs text-green-600 font-bold uppercase tracking-wider mb-1">Đã cấp</div>
+                        <div class="text-2xl font-black text-green-700">{{ vault_stats.assigned }}</div>
                     </div>
                     <div class="bg-gray-50 border border-gray-200 rounded-xl p-4 shadow-sm text-center">
-                        <div class="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">Offline</div>
-                        <div class="text-2xl font-black text-gray-700">{{ vault_stats.offline if vault_stats else 0 }}</div>
+                        <div class="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">Chưa cấp</div>
+                        <div class="text-2xl font-black text-gray-700">{{ vault_stats.unassigned }}</div>
                     </div>
                     <div class="bg-purple-50 border border-purple-200 rounded-xl p-4 shadow-sm text-center">
                         <div class="text-xs text-purple-600 font-bold uppercase tracking-wider mb-1">Premium</div>
@@ -962,13 +964,15 @@
                     <div class="text-xs text-gray-500">Tổng: <b>{{ vault_accounts|length }}</b> tài khoản</div>
                 </div>
 
-                <div class="overflow-hidden rounded-xl border border-gray-200 shadow-sm bg-white">
+                <div class="overflow-x-auto rounded-xl border border-gray-200 shadow-sm bg-white">
                     <table class="w-full text-left border-collapse">
                         <thead>
                             <tr class="bg-gray-50 text-gray-500 text-xs uppercase font-bold tracking-wider border-b border-gray-200">
-                                <th class="p-4 pl-6 w-1/4">Email / Password</th>
-                                <th class="p-4 w-1/6 text-center">Gói (Plan)</th>
-                                <th class="p-4 w-1/3">Cookies</th>
+                                <th class="p-4 pl-6">Email / Password</th>
+                                <th class="p-4 text-center">Gói</th>
+                                <th class="p-4">Cookies</th>
+                                <th class="p-4 text-center">Cấp phát</th>
+                                <th class="p-4 text-center">Trạng thái gói</th>
                                 <th class="p-4 text-center">Gửi lại sau</th>
                                 <th class="p-4 text-center">Thao tác</th>
                             </tr>
@@ -976,46 +980,30 @@
                         <tbody class="divide-y divide-gray-100">
                             {% if vault_accounts|length == 0 %}
                             <tr>
-                                <td colspan="5" class="p-8 text-center text-gray-400">
+                                <td colspan="7" class="p-8 text-center text-gray-400">
                                     <i class="fas fa-box-open text-4xl mb-3 opacity-50"></i>
                                     <p>Kho đang trống. Hãy upload file Excel để thêm tài khoản!</p>
                                 </td>
                             </tr>
                             {% else %}
                                 {% for acc in vault_accounts %}
-                                <tr class="hover:bg-gray-50 bg-white vault-row" data-acc-id="{{ acc.id }}" data-acc-status="{{ acc.status }}">
+                                <tr class="hover:bg-gray-50 bg-white vault-row" data-acc-id="{{ acc.id }}" data-acc-status="{{ acc.status }}" data-allocated="{{ 'true' if acc.is_allocated else 'false' }}">
                                     <td class="p-4 pl-6">
                                         <div class="font-bold text-gray-900 text-sm">{{ acc.email }}</div>
                                         <div class="text-xs text-red-500 font-mono mt-1">{{ acc.password }}</div>
                                     </td>
                                     <td class="p-4 text-center">
-                                        <span class="px-2.5 py-1 rounded-md text-xs font-bold border {{ 'bg-purple-100 text-purple-700 border-purple-200' if 'Premium' in acc.plan else 'bg-gray-100 text-gray-600 border-gray-200' }}">{{ acc.plan }}</span>
+                                        <span class="px-2.5 py-1 rounded-md text-xs font-bold border {{ 'bg-purple-100 text-purple-700 border-purple-200' if 'Premium' in (acc.plan or '') else 'bg-gray-100 text-gray-600 border-gray-200' }}">{{ acc.plan or '—' }}</span>
                                     </td>
                                     <td class="p-4">
-                                        <span class="text-xs text-gray-400 font-mono truncate max-w-[180px] block bg-gray-50 p-1 rounded border border-gray-100" title='{{ acc.cookies }}'>{{ acc.cookies[:25] }}{% if acc.cookies|length > 25 %}...{% endif %}</span>
+                                        {% set cookies = acc.cookies or '' %}
+                                        <span class="text-xs text-gray-400 font-mono truncate max-w-[180px] block bg-gray-50 p-1 rounded border border-gray-100" title="{{ cookies }}">{{ cookies[:25] }}{% if cookies|length > 25 %}...{% endif %}</span>
                                     </td>
                                     <td class="p-4 text-center">
-                                        <!-- 👇 STATUS -->
-                                        {% if acc.status %}
-                                            <div class="mb-1">
-                                                <span class="px-2 py-1 rounded-full text-xs font-bold 
-                                                    {% if acc.status == 'Đã Live' %}
-                                                        bg-green-100 text-green-700 border border-green-200
-                                                    {% elif acc.status == 'Dead' or acc.status == 'Hết hạn' %}   bg-red-100 text-red-700 border border-red-200
-                                                    {% elif acc.status == 'Dead' %}
-                                                        bg-red-100 text-red-700 border border-red-200
-                                                    {% elif acc.status == 'Đã Cấp' %}
-                                                        bg-yellow-100 text-yellow-700 border border-yellow-200
-                                                    {% else %}
-                                                        bg-gray-100 text-gray-600 border border-gray-200
-                                                    {% endif %}
-                                                ">
-                                                    {{ acc.status }}
-                                                </span>
-                                            </div>
-                                        {% endif %}
-
-                                        <!-- 👇 COUNTDOWN -->
+                                        <span class="whitespace-nowrap rounded-full px-2 py-1 text-xs font-bold {{ 'bg-teal-100 text-teal-800' if acc.is_allocated else 'bg-gray-100 text-gray-600' }}">{{ acc.allocation_label }}</span>
+                                    </td>
+                                    <td class="p-4 text-center text-xs" id="vault-subscription-{{ acc.id }}">{{ acc.subscription_label }}</td>
+                                    <td class="p-4 text-center">
                                         {% if acc.next_recheck_at %}
                                             {% if acc.days_until_resend == 0 %}
                                                 <div class="text-[11px] font-bold text-green-600">
@@ -1943,6 +1931,12 @@
             document.getElementById('modalEditAcc').classList.remove('hidden');
         }
 
+        function updateVaultSubscription(result) {
+            if (!result.account_id || !result.subscription_label) return;
+            const cell = document.getElementById('vault-subscription-' + result.account_id);
+            if (cell) cell.textContent = result.subscription_label;
+        }
+
         let fetchingAccount = false;
         async function openFetchModal(btn) {
             if (fetchingAccount) return;
@@ -1973,7 +1967,8 @@
                 const data = await res.json();
 
                 if (!data.success) {
-                    showToastMessage(data.message || 'Không lấy được tài khoản');
+                    updateVaultSubscription(data);
+                    showToastMessage(data.message || 'Không lấy được tài khoản', 'warning');
                     return;
                 }
 
@@ -1998,7 +1993,7 @@
                 document.getElementById('modalFetchAccount').classList.remove('hidden');
             } catch (err) {
                 console.error(err);
-                showToastMessage('Chưa nhận được kết quả. Hãy tải lại kho để kiểm tra tài khoản đã cấp trước khi bấm lại.');
+                showToastMessage('Chưa nhận được kết quả. Hãy tải lại kho để kiểm tra tài khoản đã cấp trước khi bấm lại.', 'warning');
             } finally {
                 clearInterval(timer);
                 fetchingAccount = false;
@@ -2070,16 +2065,17 @@
                     showToastMessage(data.message || 'Check thành công');
                     setTimeout(() => window.location.reload(), 500);
                 } else {
-                    showToastMessage(data.message || 'Check thất bại');
+                    updateVaultSubscription(data);
+                    showToastMessage(data.message || 'Check thất bại', 'warning');
                 }
             } catch (err) {
                 console.error(err);
-                showToastMessage('Lỗi khi check account');
+                showToastMessage('Lỗi khi check account', 'warning');
             }
         }
 
         async function batchCheckAccounts() {
-            const rows = document.querySelectorAll('tr.vault-row');
+            const rows = document.querySelectorAll('tr.vault-row[data-allocated="false"]');
             const idsToCheck = [];
             rows.forEach(row => {
                 const status = row.getAttribute('data-acc-status');
@@ -2125,7 +2121,7 @@
             btn.disabled = false;
             btn.classList.remove('opacity-75', 'cursor-not-allowed');
             if (completed < idsToCheck.length) {
-                showToastMessage(`Đã dừng sau ${completed}/${idsToCheck.length} kết quả xác nhận. Hãy tải lại kho để xem trạng thái.`);
+                showToastMessage(`Đã dừng sau ${completed}/${idsToCheck.length} kết quả xác nhận. Hãy tải lại kho để xem trạng thái.`, 'warning');
                 return;
             }
             showToastMessage('Đã hoàn tất check hàng loạt!');
@@ -2319,12 +2315,18 @@
         }
         // ---------------------------------------------
 
-        function showToastMessage(text) {
+        function showToastMessage(text, kind = 'success') {
             const toast = document.createElement('div');
-            toast.className = 'fixed bottom-5 right-5 bg-gray-800 text-white px-5 py-3 rounded-lg shadow-2xl text-sm z-50 animate-bounce font-bold flex items-center z-[9999]';
-            toast.innerHTML = `<i class="fas fa-check-circle text-green-400 mr-2 text-lg"></i> ${text}`;
+            const warning = kind === 'warning';
+            toast.className = 'fixed bottom-5 right-5 bg-gray-800 text-white px-5 py-3 rounded-lg shadow-2xl text-sm font-bold flex items-center z-[9999]';
+            toast.setAttribute('role', warning ? 'alert' : 'status');
+            const icon = document.createElement('i');
+            icon.className = warning ? 'fas fa-exclamation-triangle text-yellow-400 mr-2 text-lg' : 'fas fa-check-circle text-green-400 mr-2 text-lg';
+            icon.setAttribute('aria-hidden', 'true');
+            toast.textContent = text;
+            toast.prepend(icon);
             document.body.appendChild(toast);
-            setTimeout(() => toast.remove(), 2500);
+            setTimeout(() => toast.remove(), warning ? 6500 : 2500);
         }
 
         document.addEventListener("DOMContentLoaded", () => {
