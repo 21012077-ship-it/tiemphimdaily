@@ -92,9 +92,6 @@
                 <div id="btn-netflix" onclick="switchTab('view-netflix')" class="flex-shrink-0 py-3 px-3 md:px-4 cursor-pointer tab-inactive border-transparent flex items-center gap-1.5 rounded-t-lg transition-all text-sm whitespace-nowrap">
                     <i class="fas fa-film text-red-500"></i> <span>Quản Lý TK Netflix</span>
                 </div>
-                <div id="btn-bankcard" onclick="switchTab('view-bankcard')" class="flex-shrink-0 py-3 px-3 md:px-4 cursor-pointer tab-inactive border-transparent flex items-center gap-1.5 rounded-t-lg transition-all text-sm whitespace-nowrap">
-                    <i class="fas fa-credit-card text-emerald-500"></i> <span>Thẻ Ngân Hàng</span>
-                </div>
                 {% endif %}
             </div>
         </div>
@@ -143,8 +140,9 @@
                                     <div class="text-xs text-gray-400 mt-1">
                                         CTV: {{ item.created_by_name or '---' }}
                                     </div>
-                                    {% if item.contact_link %}
-                                        <a href="{% if item.source == 'Zalo' %}https://zalo.me/{{item.contact_link}}{% else %}{{item.contact_link}}{% endif %}" target="_blank" class="text-blue-500 hover:text-blue-700 ml-1" title="Nhắn tin ngay">
+                                    {% set contact = item.contact_link|contact_url(item.source) %}
+                                    {% if contact %}
+                                        <a href="{{ contact }}" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:text-blue-700 ml-1" title="Nhắn tin ngay">
                                             <i class="fas fa-external-link-square-alt text-sm"></i>
                                         </a>
                                     {% endif %}
@@ -177,7 +175,7 @@
                             </div>
 
                             <div class="flex gap-2">
-                                <button onclick="copyAndStatus('{{ item.name }}', {{ item.days }}, '{{ item.type }}', {{ item.id }})" class="w-10 h-10 rounded-lg bg-gray-50 hover:bg-indigo-100 border border-gray-200 hover:border-indigo-200 text-gray-500 hover:text-indigo-600 flex items-center justify-center transition-all">
+                                <button type="button" data-reminder-name="{{ item.name }}" data-days="{{ item.days }}" data-type="{{ item.type }}" data-id="{{ item.id }}" class="w-10 h-10 rounded-lg bg-gray-50 hover:bg-indigo-100 border border-gray-200 hover:border-indigo-200 text-gray-500 hover:text-indigo-600 flex items-center justify-center transition-all">
                                     <i class="far fa-comment-dots text-lg"></i>
                                 </button>
 
@@ -298,8 +296,8 @@
                                 <th class="p-3 text-center">Slot dùng</th>
                                 <th class="p-3 text-center">Trống</th>
                                 <th class="p-3 text-center">Cảnh báo</th>
-                                <th class="p-3 text-left">Ghi Chú</th>
                                 {% if current_user.role == 'admin' %}
+                                <th class="p-3 text-left">Ghi Chú</th>
                                 <th class="p-3 text-center">Thao tác</th>
                                 {% endif %}
                             </tr>
@@ -375,6 +373,7 @@
                                     <span class="text-green-500 text-xs font-bold">✓ OK</span>
                                     {% endif %}
                                 </td>
+                                {% if current_user.role == 'admin' %}
                                 {# Cột Ghi Chú - click để sửa inline #}
                                 <td class="p-3" onclick="event.stopPropagation()">
                                     <div class="relative group/note">
@@ -395,7 +394,6 @@
                                         </div>
                                     </div>
                                 </td>
-                                {% if current_user.role == 'admin' %}
                                 <td class="p-3 text-center" onclick="event.stopPropagation()">
                                     <div class="flex items-center justify-center gap-2">
                                         <button onclick="openEditAccModal('{{ acc.id }}', '{{ acc.email }}')"
@@ -413,7 +411,7 @@
 
                             {# ── Accordion row: danh sách slot ── #}
                             <tr id="accordion-{{ acc.id }}" style="display:none">
-                                <td colspan="{% if current_user.role == 'admin' %}7{% else %}6{% endif %}" class="p-0">
+                                <td colspan="{% if current_user.role == 'admin' %}7{% else %}5{% endif %}" class="p-0">
                                     <div class="bg-gray-50/80 border-t border-gray-100 px-4 py-3">
                                         <table class="w-full text-xs">
                                             <thead>
@@ -645,8 +643,9 @@
                                 <td class="p-4 pl-6">
                                     <div class="font-bold text-gray-900 text-sm flex items-center">
                                         {{ item.customer_name }}
-                                        {% if item.contact_link %}
-                                            <a href="{% if item.source == 'Zalo' %}https://zalo.me/{{item.contact_link}}{% else %}{{item.contact_link}}{% endif %}" target="_blank" class="text-blue-500 hover:text-blue-700 ml-2" title="Liên hệ ngay">
+                                        {% set contact = item.contact_link|contact_url(item.source) %}
+                                        {% if contact %}
+                                            <a href="{{ contact }}" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:text-blue-700 ml-2" title="Liên hệ ngay">
                                                 <i class="fas fa-external-link-square-alt"></i>
                                             </a>
                                         {% endif %}
@@ -732,7 +731,7 @@
                             <p class="text-sm text-gray-500 mt-1">Bấm lấy tài khoản để nhận 1 account từ kho admin đã import, sau đó dùng nút Đăng nhập TV.</p>
                         </div>
                         <div class="flex gap-3">
-                            <button type="button" id="btn-fetch-acc-ctv" onclick="openFetchModal()" class="bg-teal-600 hover:bg-teal-700 text-white px-6 py-3 rounded-lg text-sm font-bold shadow-md transition-all flex items-center gap-2">
+                            <button type="button" id="btn-fetch-acc-ctv" onclick="openFetchModal(this)" class="bg-teal-600 hover:bg-teal-700 text-white px-6 py-3 rounded-lg text-sm font-bold shadow-md transition-all flex items-center gap-2">
                                 <i class="fas fa-wand-magic-sparkles"></i> Lấy tài khoản
                             </button>
                             <button type="button" onclick="openLoginTVModal()" class="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg text-sm font-bold shadow-md transition-all flex items-center gap-2">
@@ -912,7 +911,7 @@
                             <i class="fas fa-tasks"></i> Check Chưa Check
                         </button>
 
-                        <button type="button" id="btn-fetch-acc" onclick="openFetchModal()" class="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2.5 rounded-lg text-sm font-bold shadow-md transition-all flex items-center gap-2">
+                        <button type="button" id="btn-fetch-acc" onclick="openFetchModal(this)" class="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2.5 rounded-lg text-sm font-bold shadow-md transition-all flex items-center gap-2">
                             <i class="fas fa-magic"></i> Lấy 1 Tài Khoản
                         </button>
                     </div>
@@ -1097,191 +1096,6 @@
                 </div>
             </div>
 
-        </div>
-    </div>
-
-
-    <!-- ══ MODAL: THÊM THẺ NGÂN HÀNG ══════════════════════════════ -->
-    <div id="modal-bc-add" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
-            <div class="flex items-center justify-between mb-5">
-                <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
-                    <i class="fas fa-credit-card text-emerald-500"></i> Thêm Thẻ Ngân Hàng
-                </h3>
-                <button onclick="document.getElementById('modal-bc-add').classList.add('hidden')"
-                        class="text-gray-400 hover:text-gray-600 transition-colors">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <form action="/bank_cards/add" method="POST" class="space-y-4">
-                <!-- Ô nhập nhanh 1 dòng -->
-                <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
-                    <label class="text-xs font-bold text-emerald-700 block mb-1.5">
-                        <i class="fas fa-bolt mr-1"></i>Nhập nhanh 1 dòng <span class="font-normal text-emerald-600">(số thẻ &nbsp;CVV &nbsp;MM/YY)</span>
-                    </label>
-                    <input type="text" id="bc-quick-input"
-                           placeholder="VD: 4780 9701 7353 9448 587 7/34"
-                           oninput="bcParseQuickInput(this.value)"
-                           class="w-full border border-emerald-300 rounded-lg px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-white">
-                    <p class="text-[10px] text-emerald-500 mt-1">Nhập xong sẽ tự điền vào các ô phía dưới</p>
-                </div>
-                <div>
-                    <label class="text-xs font-bold text-gray-600 block mb-1">Số thẻ <span class="text-red-500">*</span></label>
-                    <input type="text" name="card_number" id="bc-add-number" placeholder="VD: 4111 1111 1111 1111" required
-                           class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-emerald-300">
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="text-xs font-bold text-gray-600 block mb-1">CVV/CVC</label>
-                        <input type="text" name="cvv" id="bc-add-cvv" placeholder="VD: 587" maxlength="4"
-                               class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-emerald-300">
-                    </div>
-                    <div>
-                        <label class="text-xs font-bold text-gray-600 block mb-1">Hết hạn (MM/YY)</label>
-                        <input type="text" name="expire_date" id="bc-add-expire" placeholder="VD: 07/34" maxlength="5"
-                               class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-emerald-300">
-                    </div>
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="text-xs font-bold text-gray-600 block mb-1">Chủ thẻ</label>
-                        <input type="text" name="card_holder" placeholder="Tên trên thẻ"
-                               class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300">
-                    </div>
-                    <div>
-                        <label class="text-xs font-bold text-gray-600 block mb-1">Ngân hàng</label>
-                        <input type="text" name="bank_name" placeholder="VCB, MB, TP..."
-                               class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300">
-                    </div>
-                </div>
-                <div>
-                    <label class="text-xs font-bold text-gray-600 block mb-1">Ghi chú</label>
-                    <input type="text" name="notes" placeholder="Tuỳ chọn..."
-                           class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300">
-                </div>
-                <div class="flex gap-2 pt-1">
-                    <button type="button" onclick="document.getElementById('modal-bc-add').classList.add('hidden')"
-                            class="w-1/3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl py-2.5 text-sm font-semibold transition-colors">Huỷ</button>
-                    <button type="submit"
-                            class="w-2/3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl py-2.5 text-sm font-bold transition-colors flex items-center justify-center gap-2">
-                        <i class="fas fa-plus"></i> Thêm thẻ
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- ══ MODAL: SỬA THẺ NGÂN HÀNG ══════════════════════════════ -->
-    <div id="modal-bc-edit" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
-            <div class="flex items-center justify-between mb-5">
-                <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
-                    <i class="fas fa-pen text-blue-500"></i> Sửa Thẻ Ngân Hàng
-                </h3>
-                <button onclick="document.getElementById('modal-bc-edit').classList.add('hidden')"
-                        class="text-gray-400 hover:text-gray-600 transition-colors">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <div class="space-y-4">
-                <div>
-                    <label class="text-xs font-bold text-gray-600 block mb-1">Số thẻ <span class="text-red-500">*</span></label>
-                    <input type="text" id="bc-edit-number" placeholder="Số thẻ"
-                           class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-blue-300">
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="text-xs font-bold text-gray-600 block mb-1">Chủ thẻ</label>
-                        <input type="text" id="bc-edit-holder" placeholder="Tên chủ thẻ"
-                               class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
-                    </div>
-                    <div>
-                        <label class="text-xs font-bold text-gray-600 block mb-1">Ngân hàng</label>
-                        <input type="text" id="bc-edit-bank" placeholder="VCB, MB..."
-                               class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
-                    </div>
-                </div>
-                <div>
-                    <label class="text-xs font-bold text-gray-600 block mb-1">Ghi chú</label>
-                    <input type="text" id="bc-edit-notes" placeholder="Ghi chú"
-                           class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
-                </div>
-                <div class="flex gap-2 pt-1">
-                    <button type="button" onclick="document.getElementById('modal-bc-edit').classList.add('hidden')"
-                            class="w-1/3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl py-2.5 text-sm font-semibold transition-colors">Huỷ</button>
-                    <button type="button" onclick="bcSaveEdit()"
-                            class="w-2/3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl py-2.5 text-sm font-bold transition-colors flex items-center justify-center gap-2">
-                        <i class="fas fa-save"></i> Lưu thay đổi
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ══ MODAL: KẾT QUẢ LẤY THẺ ════════════════════════════════ -->
-    <div id="modal-bc-result" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
-            <div class="text-center mb-5">
-                <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center mx-auto mb-3 shadow-lg">
-                    <i class="fas fa-credit-card text-white text-2xl"></i>
-                </div>
-                <h3 class="text-lg font-bold text-gray-800">Thẻ được chọn</h3>
-                <p class="text-xs text-gray-500 mt-1">Dịch vụ: <span id="bc-result-service" class="font-bold text-blue-600"></span></p>
-            </div>
-            <div class="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-5 mb-4 text-white shadow-inner">
-                <div class="text-xs text-gray-400 mb-1 uppercase tracking-widest">Số thẻ</div>
-                <div class="font-mono text-xl font-bold tracking-widest mb-3" id="bc-result-number">—</div>
-                <div class="flex justify-between items-end">
-                    <div>
-                        <div class="text-xs text-gray-400 uppercase tracking-widest mb-0.5">Chủ thẻ</div>
-                        <div class="font-semibold text-sm" id="bc-result-holder">—</div>
-                    </div>
-                    <div class="text-right">
-                        <div class="text-xs text-gray-400 uppercase tracking-widest mb-0.5">Ngân hàng</div>
-                        <div class="font-bold text-sm" id="bc-result-bank">—</div>
-                    </div>
-                </div>
-            </div>
-            <div id="bc-result-notes-wrap" class="bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 mb-4 hidden">
-                <div class="text-xs font-bold text-yellow-700 mb-0.5">Ghi chú:</div>
-                <div class="text-sm text-yellow-800" id="bc-result-notes"></div>
-            </div>
-            <div class="bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 mb-5 text-center">
-                <p class="text-xs text-emerald-700 font-semibold">✅ Đã tự động đánh dấu thẻ này đã add <span id="bc-result-service2" class="font-bold"></span></p>
-            </div>
-            <button onclick="document.getElementById('modal-bc-result').classList.add('hidden')"
-                    class="w-full bg-gray-900 hover:bg-black text-white rounded-xl py-3 text-sm font-bold transition-colors">
-                Đóng
-            </button>
-        </div>
-    </div>
-
-    <!-- ══ MODAL: ADD DỊCH VỤ VÀO THẺ ══════════════════════════ -->
-    <div id="modal-bc-add-service" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
-            <div class="flex items-center justify-between mb-4">
-                <h3 class="text-base font-bold text-gray-800">Thêm dịch vụ vào thẻ</h3>
-                <button onclick="document.getElementById('modal-bc-add-service').classList.add('hidden')"
-                        class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
-            </div>
-            <p class="text-xs text-gray-500 mb-3">Chọn dịch vụ hoặc nhập tên mới:</p>
-            <div class="flex flex-wrap gap-2 mb-3" id="bc-svc-presets">
-                {% for sn in ['Netflix','Spotify','YouTube Premium','Apple TV+','Disney+','HBO Max','Amazon Prime'] %}
-                <button onclick="bcSelectPresetService('{{ sn }}')"
-                        class="bc-svc-preset-btn px-3 py-1.5 rounded-lg text-xs font-bold border transition-all bg-gray-50 hover:bg-blue-50 text-gray-600 hover:text-blue-700 border-gray-200 hover:border-blue-300"
-                        data-svc="{{ sn }}">{{ sn }}</button>
-                {% endfor %}
-            </div>
-            <input type="text" id="bc-svc-input" placeholder="Hoặc nhập tên dịch vụ..."
-                   class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-emerald-300">
-            <div class="flex gap-2">
-                <button onclick="document.getElementById('modal-bc-add-service').classList.add('hidden')"
-                        class="w-1/3 bg-gray-100 text-gray-700 rounded-xl py-2 text-sm font-semibold">Huỷ</button>
-                <button onclick="bcConfirmAddService()"
-                        class="w-2/3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl py-2 text-sm font-bold transition-colors">
-                    <i class="fas fa-plus mr-1"></i> Thêm dịch vụ
-                </button>
-            </div>
         </div>
     </div>
 
@@ -1701,182 +1515,6 @@
                 {% endif %}
             </div><!-- end view-netflix -->
 
-            <!-- ══════════════════════════════════════════════════════
-                 THẺ NGÂN HÀNG
-            ══════════════════════════════════════════════════════ -->
-            <div id="view-bankcard" class="hidden">
-            {% if current_user.role == 'admin' %}
-
-                <!-- Stats row -->
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5" id="bc-stats-row">
-                    <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex items-center gap-3">
-                        <div class="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
-                            <i class="fas fa-credit-card text-emerald-500"></i>
-                        </div>
-                        <div>
-                            <div class="text-2xl font-black text-gray-900" id="bc-stat-total">{{ bank_cards|length }}</div>
-                            <div class="text-xs text-gray-400 font-medium">Tổng thẻ</div>
-                        </div>
-                    </div>
-                    {% set svc_counts = {} %}
-                    {% for sn in ['Netflix','Spotify','YouTube Premium','Apple TV+','Disney+','HBO Max','Amazon Prime'] %}
-                    <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex items-center gap-3">
-                        <div class="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
-                            <i class="fas fa-check-circle text-blue-400"></i>
-                        </div>
-                        <div>
-                            <div class="text-xl font-black text-gray-900">
-                                {{ bank_cards|selectattr('service_names','contains',sn)|list|length }}
-                                <span class="text-sm text-gray-400 font-normal">/ {{ bank_cards|length }}</span>
-                            </div>
-                            <div class="text-xs text-gray-400 font-medium truncate">{{ sn }}</div>
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-
-                <!-- Toolbar -->
-                <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-4">
-                    <div class="flex flex-wrap items-center gap-2">
-                        <button onclick="document.getElementById('modal-bc-add').classList.remove('hidden')"
-                                class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-1.5 transition-colors">
-                            <i class="fas fa-plus"></i> Thêm thẻ mới
-                        </button>
-                        <div class="h-6 border-l border-gray-200"></div>
-                        <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Lấy thẻ cho:</span>
-                        {% for sn in ['Netflix','Spotify','YouTube Premium','Apple TV+','Disney+','HBO Max','Amazon Prime'] %}
-                        <button onclick="bcGetCard('{{ sn }}')"
-                                class="bc-get-btn px-3 py-1.5 rounded-lg text-xs font-bold border transition-all bg-gray-50 hover:bg-blue-50 text-gray-700 hover:text-blue-700 border-gray-200 hover:border-blue-300 flex items-center gap-1"
-                                data-service="{{ sn }}">
-                            <i class="fas fa-bolt text-yellow-400 text-[10px]"></i> {{ sn }}
-                        </button>
-                        {% endfor %}
-                        <input type="text" id="bc-custom-service" placeholder="Tên dịch vụ khác..."
-                               class="border border-dashed border-gray-300 rounded-lg px-3 py-1.5 text-xs text-gray-600 w-40 focus:outline-none focus:ring-2 focus:ring-emerald-300">
-                        <button onclick="bcGetCard(document.getElementById('bc-custom-service').value)"
-                                class="px-3 py-1.5 rounded-lg text-xs font-bold border bg-gray-50 hover:bg-emerald-50 text-gray-700 hover:text-emerald-700 border-gray-200 hover:border-emerald-300 transition-all">
-                            <i class="fas fa-search"></i> Lấy
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Table -->
-                <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-                    <table class="w-full text-sm border-collapse" id="bc-table">
-                        <thead>
-                            <tr class="bg-gray-50 text-gray-500 text-xs uppercase font-bold tracking-wider border-b border-gray-200">
-                                <th class="p-3 pl-4 text-left">Số thẻ</th>
-                                <th class="p-3 text-left">CVV / Hết hạn</th>
-                                 <th class="p-3 text-left">Ngân hàng</th>
-                                <th class="p-3 text-left">Chủ thẻ</th>
-                                <th class="p-3 text-left">Dịch vụ đã add</th>
-                                <th class="p-3 text-left">Ghi chú</th>
-                                <th class="p-3 text-center">Thao tác</th>
-                            </tr>
-                        </thead>
-                        <tbody id="bc-tbody">
-                        {% for card in bank_cards %}
-                        <tr class="bc-row border-b border-gray-100 hover:bg-gray-50 transition-colors" data-card-id="{{ card.id }}">
-                            <td class="p-3 pl-4">
-                                <div class="flex items-center gap-2">
-                                    <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shrink-0">
-                                        <i class="fas fa-credit-card text-white text-xs"></i>
-                                    </div>
-                                    <div>
-                                        <div class="font-mono font-bold text-gray-800 text-sm tracking-widest">{{ card.card_number_masked }}</div>
-                                        <div class="text-[10px] text-gray-400 font-mono">{{ card.card_number }}</div>
-                                    </div>
-                                </div>
-                            </td>
-                            <td class="p-3">
-                                <div class="flex flex-col gap-0.5">
-                                    {% if card.cvv %}
-                                    <div class="flex items-center gap-1">
-                                        <span class="text-[10px] text-gray-400 uppercase">CVV</span>
-                                        <span class="font-mono font-bold text-gray-800 text-xs bg-gray-100 px-1.5 py-0.5 rounded tracking-widest">{{ card.cvv }}</span>
-                                    </div>
-                                    {% endif %}
-                                    {% if card.expire_date %}
-                                    <div class="flex items-center gap-1">
-                                        <span class="text-[10px] text-gray-400 uppercase">HH</span>
-                                        <span class="font-mono text-xs text-emerald-700 font-bold">{{ card.expire_date }}</span>
-                                    </div>
-                                    {% endif %}
-                                    {% if not card.cvv and not card.expire_date %}<span class="text-gray-300 text-xs">—</span>{% endif %}
-                                </div>
-                            </td>
-                            <td class="p-3">
-                                <span class="font-semibold text-gray-700">{{ card.bank_name or '—' }}</span>
-                            </td>
-                            <td class="p-3">
-                                <span class="text-gray-700">{{ card.card_holder or '—' }}</span>
-                            </td>
-                            <td class="p-3">
-                                <div class="flex flex-wrap gap-1 items-center" id="bc-services-{{ card.id }}">
-                                    {% for svc in card.services %}
-                                    <span class="bc-service-badge inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-[11px] font-bold px-2 py-0.5 rounded-full border border-blue-200 cursor-pointer hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors group"
-                                          title="Click để xoá {{ svc.service_name }}"
-                                          data-service-id="{{ svc.id }}"
-                                          data-card-id="{{ card.id }}"
-                                          onclick="bcRemoveService({{ card.id }}, {{ svc.id }}, '{{ svc.service_name|e }}', this)">
-                                        {{ svc.service_name }}
-                                        <i class="fas fa-times text-[9px] opacity-0 group-hover:opacity-100 transition-opacity"></i>
-                                    </span>
-                                    {% endfor %}
-                                    <button onclick="bcOpenAddService({{ card.id }})"
-                                            class="inline-flex items-center gap-1 text-[11px] font-bold text-gray-400 hover:text-emerald-600 px-2 py-0.5 rounded-full border border-dashed border-gray-200 hover:border-emerald-300 transition-all">
-                                        <i class="fas fa-plus text-[9px]"></i> Add
-                                    </button>
-                                </div>
-                            </td>
-                            <td class="p-3">
-                                <span class="text-xs text-gray-500 bc-notes-display" id="bc-note-display-{{ card.id }}"
-                                      onclick="bcStartEditNote({{ card.id }})" title="Click để sửa"
-                                      class="cursor-pointer hover:bg-gray-100 rounded px-1 py-0.5 transition-colors">
-                                    {{ card.notes or '' }}
-                                    {% if not card.notes %}<span class="text-gray-300 italic text-[11px]">+ Ghi chú</span>{% endif %}
-                                </span>
-                                <div id="bc-note-edit-{{ card.id }}" class="hidden">
-                                    <input type="text" id="bc-note-input-{{ card.id }}" value="{{ card.notes or '' }}"
-                                           placeholder="Nhập ghi chú..."
-                                           class="w-full text-xs border border-emerald-300 rounded px-2 py-1 focus:outline-none"
-                                           onblur="bcSaveNote({{ card.id }})"
-                                           onkeydown="if(event.key==='Enter')bcSaveNote({{ card.id }});if(event.key==='Escape')bcCancelNote({{ card.id }})">
-                                </div>
-                            </td>
-                            <td class="p-3 text-center">
-                                <div class="flex items-center justify-center gap-2">
-                                    <button onclick="bcOpenEdit({{ card.id }}, '{{ card.card_number|e }}', '{{ card.cvv|e }}', '{{ card.expire_date|e }}', '{{ card.card_holder|e }}', '{{ card.bank_name|e }}', '{{ card.notes|e }}')"
-                                            class="text-gray-400 hover:text-blue-500 p-1 rounded transition-colors" title="Sửa thẻ">
-                                        <i class="fas fa-pen text-xs"></i>
-                                    </button>
-                                    <button onclick="bcDeleteCard({{ card.id }}, '{{ card.card_number_masked|e }}')"
-                                            class="text-gray-400 hover:text-red-500 p-1 rounded transition-colors" title="Xoá thẻ">
-                                        <i class="fas fa-trash-alt text-xs"></i>
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-                        {% else %}
-                        <tr id="bc-empty-row">
-                            <td colspan="6" class="py-12 text-center text-gray-400">
-                                <i class="fas fa-credit-card text-3xl mb-3 opacity-20 block"></i>
-                                <p class="text-sm">Chưa có thẻ nào. Hãy thêm thẻ ngân hàng đầu tiên!</p>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-
-            {% else %}
-                <div class="text-center py-20 text-gray-400">
-                    <i class="fas fa-lock text-4xl mb-4 opacity-30"></i>
-                    <p class="font-medium">Chỉ Admin mới có quyền truy cập.</p>
-                </div>
-            {% endif %}
-            </div><!-- end view-bankcard -->
-
             <!-- ── MODAL: THÊM TÀI KHOẢN ──────────────────────────── -->
             <div id="modal-nfx-add" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 hidden">
                 <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
@@ -2231,7 +1869,7 @@
 
     <script>
         function switchTab(id) {
-            ['view-todo', 'view-premium', 'view-standard', 'view-fetch', 'view-master', 'view-vault', 'view-users', 'view-activity', 'view-batch', 'view-netflix', 'view-bankcard'].forEach(v => {
+            ['view-todo', 'view-premium', 'view-standard', 'view-fetch', 'view-master', 'view-vault', 'view-users', 'view-activity', 'view-batch', 'view-netflix'].forEach(v => {
                 let el = document.getElementById(v);
                 if (el) el.classList.add('hidden');
             });
@@ -2305,19 +1943,25 @@
             document.getElementById('modalEditAcc').classList.remove('hidden');
         }
 
-        async function openFetchModal() {
-            const btn = document.activeElement && (document.activeElement.id === 'btn-fetch-acc' || document.activeElement.id === 'btn-fetch-acc-ctv')
-                ? document.activeElement
-                : (document.getElementById('btn-fetch-acc') || document.getElementById('btn-fetch-acc-ctv'));
-            const originalHTML = btn ? btn.innerHTML : '';
+        let fetchingAccount = false;
+        async function openFetchModal(btn) {
+            if (fetchingAccount) return;
+            fetchingAccount = true;
+            const originalHTML = btn.innerHTML;
             const planSelect = document.getElementById('fetch_plan');
             const plan = planSelect ? planSelect.value : 'Premium';
-
-            if (btn) {
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang lấy tài khoản...';
-                btn.disabled = true;
-                btn.classList.add('opacity-75', 'cursor-not-allowed');
-            }
+            const started = performance.now();
+            const waiting = document.createElement('span');
+            const updateWait = () => {
+                const seconds = Math.floor((performance.now() - started) / 1000);
+                waiting.textContent = `Đang lấy tài khoản ${plan || 'trong kho'} · ${seconds}s`;
+            };
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i>';
+            btn.appendChild(waiting);
+            updateWait();
+            const timer = setInterval(updateWait, 1000);
+            btn.disabled = true;
+            btn.classList.add('opacity-75', 'cursor-not-allowed');
 
             try {
                 const res = await fetch('/fetch_account', {
@@ -2354,13 +1998,13 @@
                 document.getElementById('modalFetchAccount').classList.remove('hidden');
             } catch (err) {
                 console.error(err);
-                showToastMessage('Có lỗi khi gọi server!');
+                showToastMessage('Chưa nhận được kết quả. Hãy tải lại kho để kiểm tra tài khoản đã cấp trước khi bấm lại.');
             } finally {
-                if (btn) {
-                    btn.innerHTML = originalHTML;
-                    btn.disabled = false;
-                    btn.classList.remove('opacity-75', 'cursor-not-allowed');
-                }
+                clearInterval(timer);
+                fetchingAccount = false;
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+                btn.classList.remove('opacity-75', 'cursor-not-allowed');
             }
         }
 
@@ -2456,27 +2100,34 @@
             const btn = document.getElementById('btn-batch-check');
             const originalHTML = btn.innerHTML;
 
+            let completed = 0;
             for (let i = 0; i < idsToCheck.length; i++) {
                 const id = idsToCheck[i];
                 btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Đang check ${i + 1}/${idsToCheck.length}...`;
                 btn.disabled = true;
                 btn.classList.add('opacity-75', 'cursor-not-allowed');
 
+                const row = document.querySelector(`tr.vault-row[data-acc-id="${id}"]`);
+                if (row) row.style.opacity = '0.5';
                 try {
-                    const row = document.querySelector(`tr.vault-row[data-acc-id="${id}"]`);
-                    if(row) row.style.opacity = '0.5';
-
-                    await fetch(`/check_account/${id}`, { method: 'POST' });
-                    
-                    if(row) row.style.opacity = '1';
+                    const response = await fetch(`/check_account/${id}`, { method: 'POST' });
+                    if (!response.ok || !(await response.json()).success) break;
+                    completed++;
                 } catch (err) {
                     console.error('Error checking account', id, err);
+                    break;
+                } finally {
+                    if (row) row.style.opacity = '1';
                 }
             }
 
             btn.innerHTML = originalHTML;
             btn.disabled = false;
             btn.classList.remove('opacity-75', 'cursor-not-allowed');
+            if (completed < idsToCheck.length) {
+                showToastMessage(`Đã dừng sau ${completed}/${idsToCheck.length} kết quả xác nhận. Hãy tải lại kho để xem trạng thái.`);
+                return;
+            }
             showToastMessage('Đã hoàn tất check hàng loạt!');
             setTimeout(() => window.location.reload(), 1000);
         }
@@ -2532,6 +2183,13 @@
             navigator.clipboard.writeText(copyText.value);
             showToastMessage('Đã copy thành công!');
         }
+
+        document.querySelectorAll('[data-reminder-name]').forEach(button => {
+            button.addEventListener('click', () => {
+                const { reminderName, days, type, id } = button.dataset;
+                copyAndStatus(reminderName, Number(days), type, id);
+            });
+        });
 
         function copyAndStatus(name, days, type, id) {
             let msg = days === 0
@@ -2675,7 +2333,7 @@
 
             let tabToOpen = 'view-todo';
 
-            if (hashTab && ['view-todo', 'view-premium', 'view-standard', 'view-fetch', 'view-master', 'view-vault', 'view-users', 'view-activity', 'view-batch', 'view-netflix', 'view-bankcard'].includes(hashTab)) {
+            if (hashTab && ['view-todo', 'view-premium', 'view-standard', 'view-fetch', 'view-master', 'view-vault', 'view-users', 'view-activity', 'view-batch', 'view-netflix'].includes(hashTab)) {
                 tabToOpen = hashTab;
             } else if (savedTab) {
                 tabToOpen = savedTab;
@@ -2995,211 +2653,6 @@
             if (el) el.addEventListener('click', function(e) {
                 if (e.target === this) this.classList.add('hidden');
             });
-        });
-    </script>
-
-    <!-- ══ BANK CARD JS ══════════════════════════════════════════════ -->
-    <script>
-        let bcEditingCardId = null;
-        let bcAddServiceCardId = null;
-
-        async function bcGetCard(serviceName) {
-            serviceName = (serviceName || '').trim();
-            if (!serviceName) { alert('Vui lòng nhập tên dịch vụ.'); return; }
-            try {
-                const res = await fetch('/bank_cards/get_card', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ service_name: serviceName })
-                });
-                const data = await res.json();
-                if (!data.success) { alert(data.message || 'Không lấy được thẻ.'); return; }
-                const c = data.card;
-                document.getElementById('bc-result-service').textContent = serviceName;
-                document.getElementById('bc-result-service2').textContent = serviceName;
-                document.getElementById('bc-result-number').textContent = c.card_number;
-                document.getElementById('bc-result-holder').textContent = c.card_holder || '—';
-                document.getElementById('bc-result-bank').textContent = c.bank_name || '—';
-                const notesWrap = document.getElementById('bc-result-notes-wrap');
-                if (c.notes) {
-                    document.getElementById('bc-result-notes').textContent = c.notes;
-                    notesWrap.classList.remove('hidden');
-                } else {
-                    notesWrap.classList.add('hidden');
-                }
-                document.getElementById('modal-bc-result').classList.remove('hidden');
-                // Cập nhật badge dịch vụ trong bảng
-                const svcContainer = document.getElementById('bc-services-' + c.id);
-                if (svcContainer) {
-                    const addBtn = svcContainer.querySelector('button');
-                    const badge = bcMakeBadge(c.id, c.service_id, serviceName);
-                    svcContainer.insertBefore(badge, addBtn);
-                }
-            } catch(err) { alert('Lỗi kết nối. Vui lòng thử lại.'); }
-        }
-
-        function bcMakeBadge(cardId, serviceId, name) {
-            const span = document.createElement('span');
-            span.className = 'bc-service-badge inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-[11px] font-bold px-2 py-0.5 rounded-full border border-blue-200 cursor-pointer hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors group';
-            span.title = 'Click để xoá ' + name;
-            span.dataset.serviceId = serviceId;
-            span.dataset.cardId = cardId;
-            span.innerHTML = name + ' <i class="fas fa-times text-[9px] opacity-0 group-hover:opacity-100 transition-opacity"></i>';
-            span.onclick = function() { bcRemoveService(cardId, serviceId, name, this); };
-            return span;
-        }
-
-        function bcOpenAddService(cardId) {
-            bcAddServiceCardId = cardId;
-            document.getElementById('bc-svc-input').value = '';
-            document.querySelectorAll('.bc-svc-preset-btn').forEach(b => b.classList.remove('ring-2','ring-emerald-400','bg-emerald-50','text-emerald-700','border-emerald-300'));
-            document.getElementById('modal-bc-add-service').classList.remove('hidden');
-        }
-
-        function bcSelectPresetService(name) {
-            document.getElementById('bc-svc-input').value = name;
-            document.querySelectorAll('.bc-svc-preset-btn').forEach(b => {
-                if (b.dataset.svc === name) b.classList.add('ring-2','ring-emerald-400','bg-emerald-50','text-emerald-700','border-emerald-300');
-                else b.classList.remove('ring-2','ring-emerald-400','bg-emerald-50','text-emerald-700','border-emerald-300');
-            });
-        }
-
-        async function bcConfirmAddService() {
-            const name = document.getElementById('bc-svc-input').value.trim();
-            if (!name) { alert('Vui lòng nhập tên dịch vụ.'); return; }
-            const cardId = bcAddServiceCardId;
-            try {
-                const res = await fetch('/bank_cards/' + cardId + '/add_service', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ service_name: name })
-                });
-                const data = await res.json();
-                if (!data.success) { alert(data.message); return; }
-                const svcContainer = document.getElementById('bc-services-' + cardId);
-                if (svcContainer) {
-                    const addBtn = svcContainer.querySelector('button');
-                    svcContainer.insertBefore(bcMakeBadge(cardId, data.service_id, name), addBtn);
-                }
-                document.getElementById('modal-bc-add-service').classList.add('hidden');
-            } catch(e) { alert('Lỗi kết nối.'); }
-        }
-
-        async function bcRemoveService(cardId, serviceId, serviceName, el) {
-            if (!confirm('Xoá "' + serviceName + '" khỏi thẻ này?')) return;
-            try {
-                const res = await fetch('/bank_cards/' + cardId + '/remove_service/' + serviceId, { method: 'POST' });
-                const data = await res.json();
-                if (data.success) el.remove();
-                else alert(data.message);
-            } catch(e) { alert('Lỗi kết nối.'); }
-        }
-
-        function bcParseQuickInput(val) {
-            const raw = val.trim();
-            if (!raw) return;
-            const dateRx = /(\d{1,2})\/(\d{2,4})/;
-            const dateMatch = raw.match(dateRx);
-            let expStr = '';
-            let remaining = raw;
-            if (dateMatch) {
-                const m = dateMatch[1].padStart(2,'0');
-                const y = dateMatch[2].slice(-2);
-                expStr = m + '/' + y;
-                remaining = raw.replace(dateMatch[0], '').trim();
-            }
-            const tokens = remaining.replace(/[-]/g,'').split(/\s+/).filter(t => /^\d+$/.test(t));
-            let cardDigits = '';
-            let cvvStr = '';
-            for (let i = 0; i < tokens.length; i++) {
-                if (cardDigits.length < 16) {
-                    const need = 16 - cardDigits.length;
-                    cardDigits += tokens[i].slice(0, need);
-                    if (tokens[i].length > need) cvvStr = tokens[i].slice(need);
-                } else if (!cvvStr && tokens[i].length <= 4) {
-                    cvvStr = tokens[i];
-                }
-            }
-            if (cardDigits.length >= 12) {
-                const fmt = cardDigits.match(/.{1,4}/g).join(' ');
-                const el = document.getElementById('bc-add-number');
-                if (el) el.value = fmt;
-            }
-            if (cvvStr) { const el = document.getElementById('bc-add-cvv'); if (el) el.value = cvvStr; }
-            if (expStr) { const el = document.getElementById('bc-add-expire'); if (el) el.value = expStr; }
-        }
-
-        function bcOpenEdit(cardId, number, cvv, expire, holder, bank, notes) {
-            bcEditingCardId = cardId;
-            document.getElementById('bc-edit-number').value = number;
-            document.getElementById('bc-edit-cvv').value = cvv || '';
-            document.getElementById('bc-edit-expire').value = expire || '';
-            document.getElementById('bc-edit-holder').value = holder;
-            document.getElementById('bc-edit-bank').value = bank;
-            document.getElementById('bc-edit-notes').value = notes;
-            document.getElementById('modal-bc-edit').classList.remove('hidden');
-        }
-
-        async function bcSaveEdit() {
-            const cardId = bcEditingCardId;
-            const f = new FormData();
-            f.append('card_number', document.getElementById('bc-edit-number').value.trim());
-            f.append('cvv', document.getElementById('bc-edit-cvv').value.trim());
-            f.append('expire_date', document.getElementById('bc-edit-expire').value.trim());
-            f.append('card_holder', document.getElementById('bc-edit-holder').value.trim());
-            f.append('bank_name', document.getElementById('bc-edit-bank').value.trim());
-            f.append('notes', document.getElementById('bc-edit-notes').value.trim());
-            try {
-                const res = await fetch('/bank_cards/' + cardId + '/edit', { method: 'POST', body: f });
-                const data = await res.json();
-                if (data.success) { document.getElementById('modal-bc-edit').classList.add('hidden'); location.reload(); }
-                else alert(data.message);
-            } catch(e) { alert('Lỗi kết nối.'); }
-        }
-
-        async function bcDeleteCard(cardId, masked) {
-            if (!confirm('Xoá thẻ ' + masked + '? Dữ liệu dịch vụ của thẻ cũng sẽ bị xoá.')) return;
-            try {
-                const res = await fetch('/bank_cards/' + cardId + '/delete', { method: 'POST' });
-                const data = await res.json();
-                if (data.success) {
-                    const row = document.querySelector('tr[data-card-id="' + cardId + '"]');
-                    if (row) row.remove();
-                    const statEl = document.getElementById('bc-stat-total');
-                    if (statEl) statEl.textContent = document.querySelectorAll('.bc-row').length;
-                } else alert(data.message);
-            } catch(e) { alert('Lỗi kết nối.'); }
-        }
-
-        function bcStartEditNote(cardId) {
-            document.getElementById('bc-note-display-' + cardId).classList.add('hidden');
-            document.getElementById('bc-note-edit-' + cardId).classList.remove('hidden');
-            document.getElementById('bc-note-input-' + cardId).focus();
-        }
-
-        async function bcSaveNote(cardId) {
-            const val = document.getElementById('bc-note-input-' + cardId).value;
-            try {
-                await fetch('/bank_cards/' + cardId + '/update_notes', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ notes: val })
-                });
-                const display = document.getElementById('bc-note-display-' + cardId);
-                display.innerHTML = val || '<span class="text-gray-300 italic text-[11px]">+ Ghi chú</span>';
-                display.classList.remove('hidden');
-                document.getElementById('bc-note-edit-' + cardId).classList.add('hidden');
-            } catch(e) {}
-        }
-
-        function bcCancelNote(cardId) {
-            document.getElementById('bc-note-display-' + cardId).classList.remove('hidden');
-            document.getElementById('bc-note-edit-' + cardId).classList.add('hidden');
-        }
-
-        ['modal-bc-add','modal-bc-edit','modal-bc-result','modal-bc-add-service'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.addEventListener('click', function(e) { if (e.target === this) this.classList.add('hidden'); });
         });
     </script>
 </body>

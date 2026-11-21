@@ -1,9 +1,14 @@
 import os
 import json
+import threading
+import uuid
 import time
+import click
 from functools import wraps
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, abort
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, abort, after_this_request
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.engine import URL
+from sqlalchemy.exc import IntegrityError
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
@@ -17,21 +22,20 @@ from urllib3.exceptions import InsecureRequestWarning
 requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key")
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY")
+if not (app.config["SECRET_KEY"] or "").strip():
+    raise RuntimeError("SECRET_KEY must be configured")
 
-# Railway: dùng PostgreSQL nếu có, nếu không thì tạm dùng SQLite ở /tmp
-# ẨN ĐI KHI MUỐN CHẠY TRÊN LAPTOP 
 database_url = os.environ.get("DATABASE_URL")
-
 if not database_url:
-    raise RuntimeError("DATABASE_URL is not set")
-
-# # Tự động lấy biến môi trường, nếu không có thì dùng file local.db (SQLite)
-# database_url = os.environ.get("DATABASE_URL", "sqlite:///local.db")
-
-
+    db_password = os.environ.get("POSTGRES_PASSWORD")
+    if not db_password:
+        raise RuntimeError("Configure DATABASE_URL or the Compose POSTGRES_PASSWORD")
+    database_url = URL.create(
+        "postgresql+psycopg", username="appuser", password=db_password,
+        host="db", database="netflix_manager"
+    )
 app.config["SQLALCHEMY_DATABASE_URI"] = database_url
-
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
@@ -247,46 +251,6 @@ class NetflixProfile(db.Model):
     assigned_at = db.Column(db.DateTime, nullable=True)       # thời điểm được cấp
 
 
-class BankCard(db.Model):
-    """Thẻ ngân hàng dùng để đăng ký các dịch vụ streaming."""
-    id = db.Column(db.Integer, primary_key=True)
-    card_number = db.Column(db.String(20), nullable=False)       # Số thẻ đầy đủ
-    card_holder = db.Column(db.String(100), default='')           # Tên chủ thẻ
-    bank_name = db.Column(db.String(100), default='')             # Tên ngân hàng
-    cvv = db.Column(db.String(10), default='')                    # Mã CVV/CVC
-    expire_date = db.Column(db.String(10), default='')            # Ngày hết hạn (MM/YY)
-    notes = db.Column(db.Text, default='')                        # Ghi chú
-    active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    services = db.relationship('CardService', backref='card', lazy=True,
-                               cascade='all, delete-orphan',
-                               order_by='CardService.added_at')
-
-    @property
-    def card_number_masked(self):
-        """Hiển thị dạng **** **** **** 4321"""
-        n = self.card_number.replace(' ', '').replace('-', '')
-        if len(n) >= 4:
-            return '**** **** **** ' + n[-4:]
-        return self.card_number
-
-    def has_service(self, service_name):
-        return any(s.service_name.lower() == service_name.lower() for s in self.services)
-
-    @property
-    def service_names(self):
-        return [s.service_name for s in self.services]
-
-
-class CardService(db.Model):
-    """Dịch vụ đã được đăng ký/add vào thẻ ngân hàng."""
-    id = db.Column(db.Integer, primary_key=True)
-    card_id = db.Column(db.Integer, db.ForeignKey('bank_card.id'), nullable=False)
-    service_name = db.Column(db.String(100), nullable=False)   # Netflix, Spotify, ...
-    added_at = db.Column(db.DateTime, default=datetime.utcnow)
-    added_by_name = db.Column(db.String(100), default='')
-
-
 @login_manager.user_loader
 def load_user(user_id):
     return db.session.get(User, int(user_id))
@@ -321,27 +285,39 @@ def not_tv_required(func):
 
 
 def create_default_admin():
-    admin_username = os.environ.get('ADMIN_USERNAME', 'admin')
-    admin_password = os.environ.get('ADMIN_PASSWORD', 'admin123')
+    if db.session.query(User.id).first() is not None:
+        return
 
-    admin = User.query.filter_by(username=admin_username).first()
+    username = os.environ.get('ADMIN_USERNAME', 'admin').strip()
+    password = os.environ.get('ADMIN_PASSWORD')
+    if not username or not (password or '').strip():
+        raise RuntimeError("Set ADMIN_USERNAME and ADMIN_PASSWORD to initialize the first admin")
 
-    if not admin:
-        admin = User(
-            username=admin_username,
-            full_name='Quản trị viên',
-            role='admin',
-            active=True
-        )
-        db.session.add(admin)
+    admin = User(username=username, full_name='Quản trị viên', role='admin', active=True)
+    admin.set_password(password)
+    db.session.add(admin)
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        # Another worker may have initialized the same account at startup.
+        if not User.query.filter_by(username=username).first():
+            raise
 
-    admin.active = True
-    admin.role = 'admin'
-    admin.full_name = 'Quản trị viên'
-    admin.set_password(admin_password)
 
+@app.cli.command('reset-admin-password')
+@click.argument('username')
+def reset_admin_password(username):
+    """Đổi mật khẩu quản trị viên trên cơ sở dữ liệu đang cấu hình."""
+    admin = User.query.filter_by(username=username, role='admin').first()
+    if admin is None:
+        raise click.ClickException("Không tìm thấy quản trị viên này.")
+    password = click.prompt('Mật khẩu mới', hide_input=True, confirmation_prompt=True)
+    if not password.strip():
+        raise click.ClickException("Mật khẩu không được để trống.")
+    admin.set_password(password)
     db.session.commit()
-    print(f"[AUTH] Admin ready: {admin_username} / {admin_password}")
+    click.echo("Đã đổi mật khẩu quản trị viên.")
 
 
 with app.app_context():
@@ -409,17 +385,6 @@ with app.app_context():
                 db.session.commit()
                 print("[DB] Migrated: tool_key.bound_email")
 
-        if 'bank_card' in user_tables:
-            columns = [col['name'] for col in inspector.get_columns('bank_card')]
-            if 'cvv' not in columns:
-                db.session.execute(text("ALTER TABLE bank_card ADD COLUMN cvv VARCHAR(10) DEFAULT ''"))
-                db.session.commit()
-                print("[DB] Migrated: bank_card.cvv")
-            if 'expire_date' not in columns:
-                db.session.execute(text("ALTER TABLE bank_card ADD COLUMN expire_date VARCHAR(10) DEFAULT ''"))
-                db.session.commit()
-                print("[DB] Migrated: bank_card.expire_date")
-
         create_default_admin()
 
     else:
@@ -445,6 +410,29 @@ def ensure_item_access(item):
     return None
 
 
+@app.template_filter('contact_url')
+def contact_url(value, source):
+    value = (value or '').strip()
+    if not value or '\\' in value or any(ord(char) < 32 for char in value):
+        return None
+    try:
+        parts = urllib.parse.urlsplit(value)
+        if parts.scheme:
+            return value if parts.scheme in ('http', 'https') and parts.hostname else None
+        if parts.netloc:
+            return 'https:' + value if parts.hostname else None
+    except ValueError:
+        return None
+
+    host = value.partition('/')[0].lower()
+    social_domains = ('facebook.com', 'fb.com', 'fb.me', 'm.me', 'instagram.com', 'zalo.me')
+    if any(host == domain or host.endswith('.' + domain) for domain in social_domains):
+        return 'https://' + value
+    if source == 'Zalo':
+        return 'https://zalo.me/' + urllib.parse.quote(value, safe='+')
+    return None
+
+
 def get_visible_standard_query():
     query = StandardSub.query.filter_by(active=True)
     if current_user.role != 'admin':
@@ -461,15 +449,27 @@ def get_visible_premium_slot_query(active_only=False):
     return query
 
 
-def get_visible_premiums():
-    accounts = PremiumAccount.query.order_by(PremiumAccount.id.desc()).all()
-    if current_user.role == 'admin':
-        return accounts
+def get_visible_premiums(visible_slots):
+    slots_by_account = {}
+    for slot in visible_slots:
+        slots_by_account.setdefault(slot.account_id, []).append(slot)
+
+    is_admin = current_user.role == 'admin'
+    accounts = db.session.query(
+        PremiumAccount.id, PremiumAccount.email,
+        db.func.count(PremiumSlot.id).label('active_count'),
+    ).outerjoin(
+        PremiumSlot,
+        (PremiumSlot.account_id == PremiumAccount.id) & PremiumSlot.active.is_(True),
+    ).group_by(PremiumAccount.id, PremiumAccount.email)
+    if is_admin:
+        accounts = accounts.add_columns(PremiumAccount.notes).group_by(PremiumAccount.notes)
+
     visible = []
-    for acc in accounts:
-        has_own_slots = any(slot.active and slot.created_by_user_id == current_user.id for slot in acc.slots)
-        if has_own_slots or acc.active_count < 5:
-            visible.append(acc)
+    for account in accounts.order_by(PremiumAccount.id.desc()):
+        slots = slots_by_account.get(account.id, [])
+        if is_admin or slots or account.active_count < 5:
+            visible.append({**account._mapping, 'slots': slots})
     return visible
 
 
@@ -797,19 +797,17 @@ def check_netflix_cookie_live(cookie_text):
                     browser.close()
                     return 'LIVE', "Cookie hoạt động & Đang có gói cước" # <-- BÁO LIVE
                     
-                except Exception as inner_e:
-                    print(f"[Check Account Error]: {inner_e}")
-                    browser.close()
-                    return 'LIVE', "Cookie hoạt động (Lỗi khi check hạn)"
+                except Exception:
+                    return 'UNKNOWN', "Chưa xác minh được thời hạn của tài khoản."
 
             browser.close()
-            return 'DEAD', "Không xác định được trạng thái cookie, coi như Dead"
-    except Exception as e:
+            return 'UNKNOWN', "Chưa xác định được trạng thái tài khoản."
+    except Exception:
         try:
             if context: context.close()
             if browser: browser.close()
         except: pass
-        return 'DEAD', f"Lỗi Playwright: {str(e)}"
+        return 'UNKNOWN', "Dịch vụ kiểm tra tạm thời không phản hồi."
 
 
 def login_netflix_tv(cookie_text, tv_code):
@@ -890,14 +888,9 @@ def auto_recheck_assigned_accounts():
         ).all()
 
         if not due_accounts:
-            print("[AUTO RESET] Không có account nào đến hạn gửi lại.")
             return
 
-        print(f"[AUTO RESET] Bắt đầu reset {len(due_accounts)} account đến hạn...")
-
         for acc in due_accounts:
-            print(f"[AUTO RESET] Reset: {acc.email}")
-
             acc.status = "Offline"
             acc.assigned_to = ""
             acc.assigned_to_user_id = None
@@ -906,7 +899,9 @@ def auto_recheck_assigned_accounts():
             acc.next_recheck_at = None
 
         db.session.commit()
-        print("[AUTO RESET] Hoàn tất reset account đến hạn.")
+        app.logger.info("Reset %d expired account assignments", len(due_accounts))
+
+
 # --- AUTH ROUTES ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -993,7 +988,8 @@ def index():
     auto_recheck_assigned_accounts()
 
     standards_active = get_visible_standard_query().order_by(StandardSub.expiry_date.asc()).all()
-    premiums = get_visible_premiums()
+    premium_slots = get_visible_premium_slot_query(active_only=True).order_by(PremiumSlot.id).all()
+    premiums = get_visible_premiums(premium_slots)
 
     todos = []
     for s in standards_active:
@@ -1011,9 +1007,8 @@ def index():
                 'created_by_name': s.created_by_name or ''
             })
 
-    premium_todo_slots = get_visible_premium_slot_query(active_only=True).order_by(PremiumSlot.expiry_date.asc()).all()
-    premium_acc_map = {acc.id: acc.email for acc in PremiumAccount.query.all()}
-    for slot in premium_todo_slots:
+    premium_acc_map = {acc['id']: acc['email'] for acc in premiums}
+    for slot in premium_slots:
         if slot.days_left <= 5:
             todos.append({
                 'type': 'premium',
@@ -1072,7 +1067,6 @@ def index():
     my_fetched_accounts = AccountVault.query.filter_by(assigned_to_user_id=current_user.id).order_by(AccountVault.assigned_at.desc()).all() if current_user.role != 'admin' else []
     users = User.query.order_by(User.created_at.desc()).all() if current_user.role == 'admin' else []
     activity_logs = ActivityLog.query.order_by(ActivityLog.created_at.desc()).limit(200).all() if current_user.role == 'admin' else []
-    bank_cards = BankCard.query.filter_by(active=True).order_by(BankCard.created_at.desc()).all() if current_user.role == 'admin' else []
 
     return render_template(
         'index.html',
@@ -1085,7 +1079,6 @@ def index():
         my_fetched_accounts=my_fetched_accounts,
         users=users,
         activity_logs=activity_logs,
-        bank_cards=bank_cards,
         today=date.today()
     )
 
@@ -1381,8 +1374,9 @@ def check_account(item_id):
     if not acc:
         return jsonify({'success': False, 'message': 'Không tìm thấy tài khoản.'}), 404
 
-    # Gọi hàm để lấy 1 trong 3 trạng thái
     status_code, check_msg = check_netflix_cookie_live(acc.cookies)
+    if status_code == 'UNKNOWN':
+        return jsonify(success=False, message=check_msg), 503
     acc.last_checked_at = datetime.now()
     
     # Gán trạng thái vào DB tương ứng
@@ -1484,6 +1478,17 @@ def get_netflix_login_url(cookie_text):
 @login_required
 @not_tv_required
 def fetch_account():
+    started = time.perf_counter()
+    durations = {}
+
+    @after_this_request
+    def add_timing(response):
+        durations['total'] = time.perf_counter() - started
+        response.headers['Server-Timing'] = ', '.join(
+            f'{phase};dur={seconds * 1000:.1f}' for phase, seconds in durations.items()
+        )
+        return response
+
     try:
         data = request.get_json(silent=True) or {}
         plan = (data.get('plan') or '').strip()
@@ -1495,13 +1500,19 @@ def fetch_account():
 
         if plan: query = query.filter(AccountVault.plan.ilike(f"%{plan}%"))
 
+        query_started = time.perf_counter()
         candidates = query.order_by(AccountVault.id.asc()).all()
+        durations['inventory'] = time.perf_counter() - query_started
 
         if not candidates:
             return jsonify({'success': False, 'message': 'Không còn tài khoản phù hợp trong kho.'}), 404
 
         for acc in candidates:
+            check_started = time.perf_counter()
             status_code, check_msg = check_netflix_cookie_live(acc.cookies)
+            durations['check'] = durations.get('check', 0) + (time.perf_counter() - check_started)
+            if status_code == 'UNKNOWN':
+                return jsonify(success=False, message=f"{check_msg} Đã dừng yêu cầu lấy tài khoản."), 503
             acc.last_checked_at = datetime.now()
 
             if status_code == 'LIVE':
@@ -1514,7 +1525,9 @@ def fetch_account():
                 db.session.commit()
                 log_activity('Lấy account kho', f"Lấy {acc.email} - Plan: {acc.plan}")
 
+                link_started = time.perf_counter()
                 login_url = get_netflix_login_url(acc.cookies)
+                durations['link'] = time.perf_counter() - link_started
 
                 return jsonify({
                     'success': True,
@@ -1614,68 +1627,6 @@ def assign_account(item_id):
     return jsonify({'success': True, 'message': f'Đã cấp tài khoản {acc.email}', 'account': format_vault_status(acc, include_secrets=True)})
 
 
-def get_household_link(email):
-    from playwright.sync_api import sync_playwright
-    import time
-    import re
-    try:
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
-            page.goto("https://zx4nxt_bot_1.opomail.store/login?key=6N7Z", wait_until="networkidle")
-            time.sleep(2)
-
-            # Fill email vào đúng ô Netflix Account Email
-            page.locator('#email-input').fill(email)
-            time.sleep(0.5)
-
-            # Chọn loại Household
-            page.locator('text="Household"').click()
-            time.sleep(1)
-
-            # Bấm nút Retrieve Access Info
-            page.locator('text="Retrieve Access Info"').click()
-
-            # Patterns cần tìm
-            nftoken_pattern = re.compile(
-                r'https://www\.netflix\.com/account/update-primary-location\?nftoken=[^\s"<]+'
-            )
-            # Mã 4 số nằm ngay trong block TRAVELING VERIFICATION CODE (không phải timestamp/năm)
-            # Bot HTML thường có: "TRAVELING VERIFICATION CODE</...>1234" hoặc tương tự
-            verification_block_pattern = re.compile(
-                r'TRAVELING VERIFICATION CODE[\s\S]{0,300}?>\s*([A-Z]+|\d{4})\s*<',
-                re.IGNORECASE
-            )
-
-            deadline = time.time() + 30  # tối đa 30 giây
-            while time.time() < deadline:
-                time.sleep(1.5)
-                html = page.content()
-
-                # 1. Ưu tiên link Netflix (Household link dài)
-                link_match = nftoken_pattern.search(html)
-                if link_match:
-                    browser.close()
-                    return link_match.group(0)
-
-                # 2. Kiểm tra kết quả trong block TRAVELING VERIFICATION CODE
-                block_match = verification_block_pattern.search(html)
-                if block_match:
-                    val = block_match.group(1).strip()
-                    browser.close()
-                    if val.upper() == 'EXPIRED':
-                        return "⚠️ Mã xác minh đã HẾT HẠN (EXPIRED). Bạn cần thử lại để lấy mã mới."
-                    elif val.isdigit() and len(val) == 4:
-                        return f"Mã xác minh: {val}"
-                    else:
-                        return f"Kết quả từ Bot: {val}"
-
-            # Hết thời gian vẫn không có link
-            browser.close()
-            return "Hết thời gian chờ (30s). Bot chưa trả về kết quả. Vui lòng thử lại sau."
-    except Exception as e:
-        return f"Lỗi hệ thống Playwright: {str(e)}"
-
 @app.route('/tools')
 def tools_index():
     return render_template('tool_index.html')
@@ -1688,38 +1639,19 @@ def convert_cookie_tool():
         login_url = get_netflix_login_url(cookie)
     return render_template('tool_convert.html', login_url=login_url)
 
-# --- Household tool: dùng background thread để không block gunicorn ---
-import threading
-import uuid
-
-_household_tasks = {}   # task_id -> {'status': 'pending'/'done', 'result': ...}
-
-def _run_household_task(task_id, email):
-    result = get_household_link(email)
-    _household_tasks[task_id] = {'status': 'done', 'result': result}
 
 @app.route('/tools/household', methods=['GET'])
 def household_tool():
     return render_template('tool_household.html')
 
-@app.route('/tools/household/start', methods=['POST'])
-def household_start():
-    data = request.get_json(silent=True) or {}
-    email = (data.get('email') or '').strip()
-    if not email:
-        return jsonify({'success': False, 'message': 'Thi\u1ebfu email'})
-    task_id = str(uuid.uuid4())
-    _household_tasks[task_id] = {'status': 'pending', 'result': None}
-    t = threading.Thread(target=_run_household_task, args=(task_id, email), daemon=True)
-    t.start()
-    return jsonify({'success': True, 'task_id': task_id})
-
-@app.route('/tools/household/status/<task_id>', methods=['GET'])
-def household_status(task_id):
-    task = _household_tasks.get(task_id)
-    if not task:
-        return jsonify({'status': 'not_found'})
-    return jsonify({'status': task['status'], 'result': task.get('result')})
+@app.post('/tools/household/start')
+@app.get('/tools/household/status/<task_id>')
+def household_retired(task_id=None):
+    return jsonify(
+        success=False,
+        status='not_found',
+        message='Công cụ này đã ngừng hoạt động. Vui lòng xác minh hộ gia đình trực tiếp với Netflix.',
+    ), 410
 
 
 # ============================================================
@@ -2154,151 +2086,6 @@ def netflix_accounts_update_notes(acc_id):
     acc = NetflixAccount.query.get_or_404(acc_id)
     data = request.get_json(silent=True) or {}
     acc.notes = (data.get('notes') or '').strip()
-    db.session.commit()
-    return jsonify({'success': True})
-
-
-# ─── BANK CARD MANAGEMENT ───────────────────────────────────────────
-
-PRESET_SERVICES = ['Netflix', 'Spotify', 'YouTube Premium', 'Apple TV+', 'Disney+', 'HBO Max', 'Amazon Prime']
-
-
-@app.route('/bank_cards/add', methods=['POST'])
-@login_required
-@admin_required
-def bank_card_add():
-    card_number = request.form.get('card_number', '').strip()
-    card_holder = request.form.get('card_holder', '').strip()
-    bank_name = request.form.get('bank_name', '').strip()
-    cvv = request.form.get('cvv', '').strip()
-    expire_date = request.form.get('expire_date', '').strip()
-    notes = request.form.get('notes', '').strip()
-    if not card_number:
-        flash('Vui lòng nhập số thẻ.', 'error')
-        return redirect(url_for('index') + '#view-bankcard')
-    card = BankCard(
-        card_number=card_number,
-        card_holder=card_holder,
-        bank_name=bank_name,
-        cvv=cvv,
-        expire_date=expire_date,
-        notes=notes
-    )
-    db.session.add(card)
-    db.session.commit()
-    log_activity('Thêm thẻ ngân hàng', f"Thẻ: {card.card_number_masked} | Bank: {bank_name} | Chủ: {card_holder}")
-    flash(f'Đã thêm thẻ {card.card_number_masked} thành công.', 'success')
-    return redirect(url_for('index') + '#view-bankcard')
-
-
-@app.route('/bank_cards/<int:card_id>/edit', methods=['POST'])
-@login_required
-@admin_required
-def bank_card_edit(card_id):
-    card = BankCard.query.get_or_404(card_id)
-    card.card_number = request.form.get('card_number', card.card_number).strip()
-    card.card_holder = request.form.get('card_holder', card.card_holder).strip()
-    card.bank_name = request.form.get('bank_name', card.bank_name).strip()
-    card.cvv = request.form.get('cvv', card.cvv or '').strip()
-    card.expire_date = request.form.get('expire_date', card.expire_date or '').strip()
-    card.notes = request.form.get('notes', card.notes).strip()
-    db.session.commit()
-    log_activity('Sửa thẻ ngân hàng', f"ID: {card_id} | Thẻ: {card.card_number_masked}")
-    return jsonify({'success': True, 'message': 'Đã cập nhật thẻ.'})
-
-
-@app.route('/bank_cards/<int:card_id>/delete', methods=['POST'])
-@login_required
-@admin_required
-def bank_card_delete(card_id):
-    card = BankCard.query.get_or_404(card_id)
-    masked = card.card_number_masked
-    card.active = False
-    db.session.commit()
-    log_activity('Xoá thẻ ngân hàng', f"Thẻ: {masked}")
-    return jsonify({'success': True, 'message': f'Đã xoá thẻ {masked}.'})
-
-
-@app.route('/bank_cards/<int:card_id>/add_service', methods=['POST'])
-@login_required
-@admin_required
-def bank_card_add_service(card_id):
-    card = BankCard.query.get_or_404(card_id)
-    data = request.get_json(silent=True) or {}
-    service_name = (data.get('service_name') or '').strip()
-    if not service_name:
-        return jsonify({'success': False, 'message': 'Tên dịch vụ không được trống.'})
-    if card.has_service(service_name):
-        return jsonify({'success': False, 'message': f'Thẻ này đã add {service_name} rồi.'})
-    svc = CardService(card_id=card_id, service_name=service_name, added_by_name=current_user.full_name or current_user.username)
-    db.session.add(svc)
-    db.session.commit()
-    log_activity('Thêm dịch vụ vào thẻ', f"Thẻ: {card.card_number_masked} | DV: {service_name}")
-    return jsonify({'success': True, 'message': f'Đã thêm {service_name} vào thẻ.', 'service_id': svc.id})
-
-
-@app.route('/bank_cards/<int:card_id>/remove_service/<int:service_id>', methods=['POST'])
-@login_required
-@admin_required
-def bank_card_remove_service(card_id, service_id):
-    svc = CardService.query.filter_by(id=service_id, card_id=card_id).first_or_404()
-    name = svc.service_name
-    card = svc.card
-    db.session.delete(svc)
-    db.session.commit()
-    log_activity('Xoá dịch vụ khỏi thẻ', f"Thẻ: {card.card_number_masked} | DV: {name}")
-    return jsonify({'success': True, 'message': f'Đã xoá {name} khỏi thẻ.'})
-
-
-@app.route('/bank_cards/get_card', methods=['POST'])
-@login_required
-@admin_required
-def bank_card_get():
-    """Lấy thẻ chưa add dịch vụ, đánh dấu luôn."""
-    data = request.get_json(silent=True) or {}
-    service_name = (data.get('service_name') or '').strip()
-    if not service_name:
-        return jsonify({'success': False, 'message': 'Vui lòng chỉ định tên dịch vụ.'})
-
-    cards = BankCard.query.filter_by(active=True).order_by(BankCard.created_at.asc()).all()
-    chosen = None
-    for c in cards:
-        if not c.has_service(service_name):
-            chosen = c
-            break
-
-    if not chosen:
-        return jsonify({'success': False, 'message': f'Không còn thẻ nào chưa add {service_name}. Hãy thêm thẻ mới!'})
-
-    # Đánh dấu luôn
-    svc = CardService(card_id=chosen.id, service_name=service_name,
-                      added_by_name=current_user.full_name or current_user.username)
-    db.session.add(svc)
-    db.session.commit()
-    log_activity('Lấy thẻ cho dịch vụ', f"Thẻ: {chosen.card_number_masked} | DV: {service_name}")
-
-    return jsonify({
-        'success': True,
-        'card': {
-            'id': chosen.id,
-            'card_number': chosen.card_number,
-            'card_number_masked': chosen.card_number_masked,
-            'card_holder': chosen.card_holder,
-            'bank_name': chosen.bank_name,
-            'notes': chosen.notes,
-            'service_id': svc.id
-        },
-        'message': f'Đã lấy thẻ {chosen.card_number_masked} cho {service_name}.'
-    })
-
-
-@app.route('/bank_cards/<int:card_id>/update_notes', methods=['POST'])
-@login_required
-@admin_required
-def bank_card_update_notes(card_id):
-    card = BankCard.query.get_or_404(card_id)
-    data = request.get_json(silent=True) or {}
-    card.notes = (data.get('notes') or '').strip()
     db.session.commit()
     return jsonify({'success': True})
 
