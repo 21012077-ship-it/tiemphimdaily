@@ -145,6 +145,28 @@ class AccessTests(unittest.TestCase):
                 m.db.session.delete(row)
             m.db.session.commit()
 
+    def test_inventory_filter_matches_entire_plan_label(self):
+        m = self.module
+        with self.web.app_context():
+            rows = [m.AccountVault(plan=label, status='Chưa Check') for label in
+                    ('Standard', ' Premium ', 'standard plus', 'Standard_Premium')]
+            assigned = m.AccountVault(plan='Standard', status='Đã Cấp')
+            m.db.session.add_all(rows + [assigned])
+            m.db.session.flush()
+            ids = [row.id for row in rows]
+            for plan, expected in [('', ids), ('Standard', ids[:1]), ('Premium', ids[1:2]), ('%', [])]:
+                with self.subTest(plan=plan):
+                    result = m.AccountVault.unassigned_candidates(plan).filter(
+                        m.AccountVault.id.in_(ids + [assigned.id])
+                    ).order_by(m.AccountVault.id).all()
+                    self.assertEqual([row.id for row in result], expected)
+            m.db.session.rollback()
+
+    def test_invalid_plan_type_is_not_treated_as_all_plans(self):
+        client = self.web.test_client()
+        client.post('/login', data={'username': 'test-admin', 'password': self.password})
+        self.assertEqual(client.post('/fetch_account', json={'plan': []}).status_code, 400)
+
     def test_subscription_timeout_reports_reference_without_request_data(self):
         m = self.module
         error = m.PlaywrightTimeoutError("sensitive-test-data")

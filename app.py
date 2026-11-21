@@ -180,8 +180,11 @@ class AccountVault(db.Model):
         self.next_recheck_at = None
 
     @classmethod
-    def unassigned_candidates(cls):
-        return cls.query.filter(~cls.is_allocated, cls.status.in_(['Offline', 'Chưa Check', 'Đã Live']))
+    def unassigned_candidates(cls, plan=''):
+        query = cls.query.filter(~cls.is_allocated, cls.status.in_(['Offline', 'Chưa Check', 'Đã Live']))
+        if plan:
+            query = query.filter(db.func.lower(db.func.trim(cls.plan)) == plan.lower())
+        return query
 
     @property
     def days_until_resend(self):
@@ -1571,15 +1574,13 @@ def fetch_account():
         return response
 
     try:
-        data = request.get_json(silent=True) or {}
-        plan = (data.get('plan') or '').strip()
-
-        query = AccountVault.unassigned_candidates()
-
-        if plan: query = query.filter(AccountVault.plan.ilike(f"%{plan}%"))
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict) or not isinstance(data.get('plan', ''), str):
+            return jsonify(success=False, message="Lựa chọn gói không hợp lệ."), 400
+        plan = data.get('plan', '').strip()
 
         query_started = time.perf_counter()
-        candidates = query.order_by(AccountVault.id.asc()).all()
+        candidates = AccountVault.unassigned_candidates(plan).order_by(AccountVault.id.asc()).all()
         durations['inventory'] = time.perf_counter() - query_started
 
         if not candidates:
@@ -1591,7 +1592,7 @@ def fetch_account():
             status_code, check_msg = check_netflix_cookie_live(acc.cookies)
             durations['check'] = durations.get('check', 0) + (time.perf_counter() - check_started)
             # Check ownership again after waiting for the external service.
-            acc = (AccountVault.unassigned_candidates().filter_by(id=candidate_id)
+            acc = (AccountVault.unassigned_candidates(plan).filter_by(id=candidate_id)
                    .populate_existing().with_for_update().first())
             if acc is None:
                 return jsonify(success=False, message="Trạng thái kho đã thay đổi. Yêu cầu này chưa cấp tài khoản."), 409
