@@ -14,7 +14,7 @@ from flask_login import LoginManager, UserMixin, login_user, login_required, log
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
 import openpyxl
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError, sync_playwright
 from apscheduler.schedulers.background import BackgroundScheduler
 import requests
 import urllib.parse
@@ -689,6 +689,24 @@ def log_activity(action, detail=''):
         print(f"[ACTIVITY] log failed: {ex}")
 
 
+def report_check_error(stage, error):
+    reference = uuid.uuid4().hex[:12]
+    # Exception messages from the browser can contain request data.
+    app.logger.warning("vault_check_failed ref=%s stage=%s error_type=%s",
+                       reference, stage, type(error).__name__)
+    messages = {
+        'startup': 'Không khởi động được trình duyệt kiểm tra.',
+        'setup': 'Gặp lỗi khi chuẩn bị lượt kiểm tra.',
+        'page': 'Gặp lỗi khi tải hoặc đọc trang kiểm tra.',
+        'subscription': 'Chưa xác minh được trạng thái gói.',
+        'cleanup': 'Gặp lỗi khi kết thúc lượt kiểm tra.',
+    }
+    message = messages[stage]
+    if isinstance(error, (PlaywrightTimeoutError, TimeoutError)):
+        message += ' Đã hết thời gian chờ.'
+    return 'UNKNOWN', f"{message} Mã đối chiếu: {reference}."
+
+
 def check_netflix_cookie_live(cookie_text):
     raw_cookies = parse_cookie_blob(cookie_text)
     cookies = convert_cookies_for_playwright(raw_cookies)
@@ -698,12 +716,15 @@ def check_netflix_cookie_live(cookie_text):
 
     browser = None
     context = None
+    stage = 'startup'
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True, args=["--no-sandbox"])
+            stage = 'setup'
             context = browser.new_context(viewport={"width": 1400, "height": 900})
             context.add_cookies(cookies)
             page = context.new_page()
+            stage = 'page'
             
             page.goto("https://www.netflix.com/browse", wait_until="domcontentloaded", timeout=60000)
             time.sleep(5)
@@ -713,10 +734,12 @@ def check_netflix_cookie_live(cookie_text):
             live_signals = ["profilesgate", "browse", "accountmenuitem", "netflix"]
             
             if is_login:
+                stage = 'cleanup'
                 browser.close()
                 return 'DEAD', "Cookie đã chết, bị chuyển về trang login" # <-- BÁO DEAD
             
             if any(sig in html for sig in live_signals) or "/browse" in current_url:
+                stage = 'subscription'
                 try:
                     page.goto("https://www.netflix.com/YourAccount", wait_until="domcontentloaded", timeout=60000)
                     time.sleep(4)
@@ -857,23 +880,26 @@ def check_netflix_cookie_live(cookie_text):
                     ]
                     for kw in expired_keywords:
                         if kw in body_text:
+                            stage = 'cleanup'
                             browser.close()
                             return 'EXPIRED', f"Tài khoản HẾT HẠN / HOLD (Phát hiện: {kw})" # <-- BÁO HẾT HẠN
                     
+                    stage = 'cleanup'
                     browser.close()
                     return 'LIVE', "Cookie hoạt động & Đang có gói cước" # <-- BÁO LIVE
                     
-                except Exception:
-                    return 'UNKNOWN', "Chưa xác minh được trạng thái gói."
+                except Exception as error:
+                    return report_check_error(stage, error)
 
+            stage = 'cleanup'
             browser.close()
             return 'UNKNOWN', "Chưa xác định được trạng thái tài khoản."
-    except Exception:
+    except Exception as error:
         try:
             if context: context.close()
             if browser: browser.close()
         except: pass
-        return 'UNKNOWN', "Dịch vụ kiểm tra tạm thời không phản hồi."
+        return report_check_error(stage, error)
 
 
 def login_netflix_tv(cookie_text, tv_code):

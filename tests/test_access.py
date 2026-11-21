@@ -111,10 +111,18 @@ class AccessTests(unittest.TestCase):
         with patch.object(m, "convert_cookies_for_playwright", return_value=[object()]), patch.object(
             m, "sync_playwright", side_effect=OSError("simulated outage")
         ) as offline:
-            result = client.post("/fetch_account", json={"plan": "Standard"})
+            with self.assertLogs(m.app.logger, level="WARNING") as logs:
+                result = client.post("/fetch_account", json={"plan": "Standard"})
             self.assertEqual(result.status_code, 503)
             self.assertFalse(result.get_json()["success"])
-            self.assertIn("chưa cấp tài khoản", result.get_json()["message"])
+            message = result.get_json()["message"]
+            self.assertIn("chưa cấp tài khoản", message)
+            self.assertIn("Không khởi động được trình duyệt", message)
+            reference = logs.records[0].args[0]
+            self.assertRegex(reference, r"^[a-f0-9]{12}$")
+            self.assertIn(reference, message)
+            self.assertIn("stage=startup error_type=OSError", logs.output[0])
+            self.assertNotIn("simulated outage", logs.output[0] + message)
             self.assertEqual(result.get_json()["subscription_label"], "Chưa xác minh được")
             offline.assert_called_once()
             self.assertIn("inventory;dur=", result.headers["Server-Timing"])
@@ -136,6 +144,17 @@ class AccessTests(unittest.TestCase):
                 self.assertIsNone(row.assigned_to_user_id)
                 m.db.session.delete(row)
             m.db.session.commit()
+
+    def test_subscription_timeout_reports_reference_without_request_data(self):
+        m = self.module
+        error = m.PlaywrightTimeoutError("sensitive-test-data")
+        with self.assertLogs(m.app.logger, level="WARNING") as logs:
+            result, message = m.report_check_error("subscription", error)
+        self.assertEqual(result, "UNKNOWN")
+        self.assertIn("trạng thái gói", message)
+        self.assertIn("hết thời gian chờ", message)
+        self.assertIn(logs.records[0].args[0], message)
+        self.assertNotIn("sensitive-test-data", logs.output[0] + message)
 
     def test_legacy_allocation_is_independent_of_subscription(self):
         m = self.module
