@@ -730,9 +730,13 @@
                             <h2 class="text-xl font-bold text-gray-800">Lấy tài khoản cho CTV</h2>
                             <p class="text-sm text-gray-500 mt-1">Bấm lấy tài khoản để nhận 1 account từ kho admin đã import, sau đó dùng nút Đăng nhập TV.</p>
                         </div>
-                        <div class="flex gap-3">
-                            <button type="button" id="btn-fetch-acc-ctv" {% if current_user.role != 'admin' %}data-plan="Premium"{% endif %} onclick="openFetchModal(this)" class="bg-teal-600 hover:bg-teal-700 text-white px-6 py-3 rounded-lg text-sm font-bold shadow-md transition-all flex items-center gap-2">
-                                <i class="fas fa-wand-magic-sparkles"></i> Lấy tài khoản{% if current_user.role != 'admin' %} Premium{% endif %}
+                        <div class="flex flex-wrap gap-3 items-center">
+                            <select id="fetch_plan_ctv" aria-label="Gói tài khoản cần lấy" class="bg-white border border-teal-200 text-teal-800 rounded-lg px-3 py-2.5 text-sm">
+                                <option value="Premium">Premium</option>
+                                <option value="Standard">Standard (Phổ Thông)</option>
+                            </select>
+                            <button type="button" id="btn-fetch-acc-ctv" onclick="openFetchModalCTV(this)" class="bg-teal-600 hover:bg-teal-700 text-white px-6 py-3 rounded-lg text-sm font-bold shadow-md transition-all flex items-center gap-2">
+                                <i class="fas fa-wand-magic-sparkles"></i> Lấy tài khoản
                             </button>
                             <button type="button" onclick="openLoginTVModal()" class="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg text-sm font-bold shadow-md transition-all flex items-center gap-2">
                                 <i class="fas fa-tv"></i> Đăng nhập TV
@@ -2006,9 +2010,23 @@
             }
         }
 
+        async function openFetchModalCTV(btn) {
+            const planSelect = document.getElementById('fetch_plan_ctv');
+            const plan = planSelect ? planSelect.value : 'Premium';
+            // Gán tạm data-plan vào btn rồi gọi hàm gốc
+            const prev = btn.dataset.plan;
+            btn.dataset.plan = plan;
+            await openFetchModal(btn);
+            if (prev === undefined) delete btn.dataset.plan;
+            else btn.dataset.plan = prev;
+        }
+
+
+
         async function useFetchedAccount() {
             const accId = document.getElementById('fetch_account_id').value;
             const assignedTo = document.getElementById('fetch_assigned_to').value.trim();
+
 
             if (!accId) {
                 showToastMessage('Không có tài khoản để sử dụng');
