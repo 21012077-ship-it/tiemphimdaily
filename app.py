@@ -14,7 +14,7 @@ from flask_login import LoginManager, UserMixin, login_user, login_required, log
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
 import openpyxl
-from playwright.sync_api import TimeoutError as PlaywrightTimeoutError, sync_playwright
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError, Error as PlaywrightError, sync_playwright
 from apscheduler.schedulers.background import BackgroundScheduler
 import requests
 import urllib.parse
@@ -707,6 +707,8 @@ def report_check_error(stage, error):
     message = messages[stage]
     if isinstance(error, (PlaywrightTimeoutError, TimeoutError)):
         message += ' Đã hết thời gian chờ.'
+    elif isinstance(error, PlaywrightError) and 'Target closed' in str(error):
+        message += ' Trình duyệt bị đóng bất ngờ (TargetClosedError).'
     return 'UNKNOWN', f"{message} Mã đối chiếu: {reference}."
 
 
@@ -892,6 +894,11 @@ def check_netflix_cookie_live(cookie_text):
                     return 'LIVE', "Cookie hoạt động & Đang có gói cước" # <-- BÁO LIVE
                     
                 except Exception as error:
+                    try:
+                        if context: context.close()
+                        if browser: browser.close()
+                    except Exception:
+                        pass
                     return report_check_error(stage, error)
 
             stage = 'cleanup'
