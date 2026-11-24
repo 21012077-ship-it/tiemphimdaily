@@ -178,6 +178,34 @@ class AccessTests(unittest.TestCase):
         self.assertIn(logs.records[0].args[0], message)
         self.assertNotIn("sensitive-test-data", logs.output[0] + message)
 
+    def test_cookie_check_requires_evidence_of_account_and_plan_status(self):
+        m = self.module
+        cases = [
+            ("/vn/login?next=/account", True, "Sign in", False, "DEAD"),
+            ("/account", True, "Next payment\nDecember 5\nUpdate payment method", False, "LIVE"),
+            ("/account", True, "Premium", True, "LIVE"),
+            ("/account", True, "Next payment\nYour account is on hold", True, "EXPIRED"),
+            ("/account", True, "Manage payment method\nRestart your membership", False, "UNKNOWN"),
+            ("/account", False, "Next payment", True, "UNKNOWN"),
+            ("/", True, "Netflix", False, "UNKNOWN"),
+        ]
+        with patch.object(m, "sync_playwright") as playwright, patch.object(m.time, "sleep"):
+            browser = playwright.return_value.__enter__.return_value.chromium.launch.return_value
+            page = browser.new_context.return_value.new_page.return_value
+            plan_link = page.locator.return_value.first
+            page.locator.return_value.all.return_value = [plan_link]
+            for path, http_ok, text, has_plan_link, expected in cases:
+                with self.subTest(path=path, text=text):
+                    page.url = f"https://www.netflix.com{path}"
+                    page.goto.return_value.ok = http_ok
+                    page.inner_text.return_value = text
+                    plan_link.is_visible.return_value = has_plan_link
+                    result, _ = m.check_netflix_cookie_live("NetflixId=test-value")
+                    self.assertEqual(result, expected)
+            playwright.reset_mock()
+            self.assertEqual(m.check_netflix_cookie_live("[]")[0], "DEAD")
+            playwright.assert_not_called()
+
     def test_legacy_allocation_is_independent_of_subscription(self):
         m = self.module
         with self.web.app_context():
@@ -189,7 +217,7 @@ class AccessTests(unittest.TestCase):
             self.assertNotIn(allocated, candidates)
             self.assertIn(unchecked, candidates)
             self.assertEqual(allocated.allocation_label, "Đã cấp")
-            self.assertEqual(allocated.subscription_label, "Có gói ở lần kiểm tra")
+            self.assertEqual(allocated.subscription_label, "Hoạt động")
             self.assertEqual(unchecked.subscription_label, "Chưa có kết quả")
             allocated.record_check("UNKNOWN")
             self.assertEqual(allocated.allocation_label, "Đã cấp")
@@ -203,25 +231,57 @@ class AccessTests(unittest.TestCase):
         client = self.web.test_client()
         client.post("/login", data={"username": "test-admin", "password": self.password})
         with self.web.app_context():
-            row = m.AccountVault(plan="Standard", status="Đã Cấp", assigned_to="người nhận")
+            row = m.AccountVault(email="vault-check@example.invalid", plan="Standard",
+                                 status="Đã Cấp", assigned_to="người nhận")
             m.db.session.add(row)
             m.db.session.commit()
             row_id = row.id
             self.assertEqual(row.subscription_label, "Chưa có kết quả")
+        response = client.post(f"/check_account/{row_id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json["account"]["allocation_label"], "Death")
+        self.assertEqual(response.json["account"]["subscription_result"], "DEAD")
+        self.assertTrue(response.json["account"]["is_allocated"])
+        self.assertIn(f'id="vault-account-{row_id}"', client.get("/").get_data(as_text=True))
+
+        with patch.object(m, "check_netflix_cookie_live", return_value=("UNKNOWN", "Đã hết thời gian chờ")):
+            response = client.post(f"/check_account/{row_id}")
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json["account"]["allocation_label"], "Death")
+
         with patch.object(m, "check_netflix_cookie_live", return_value=("EXPIRED", "Gói tạm ngưng")):
             response = client.post(f"/check_account/{row_id}")
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json["account"]["allocation_label"], "Đã cấp")
+        self.assertEqual(response.json["account"]["allocation_label"], "Death")
         with self.web.app_context():
             row = m.db.session.get(m.AccountVault, row_id)
             self.assertEqual(row.status, "Đã Cấp")
+            self.assertEqual(row.assigned_to, "người nhận")
             self.assertEqual(row.subscription_label, "Hết hạn hoặc tạm ngưng")
             row.release_allocation()
-            self.assertEqual(row.allocation_label, "Chưa cấp")
+            self.assertEqual(row.allocation_label, "Death")
             self.assertEqual(row.subscription_label, "Hết hạn hoặc tạm ngưng")
             self.assertNotIn(row, m.AccountVault.unassigned_candidates().all())
+            m.db.session.commit()
+
+        self.assertEqual(client.post(f"/assign_account/{row_id}", json={}).status_code, 409)
+        with patch.object(m, "check_netflix_cookie_live", return_value=("LIVE", "Gói còn hiệu lực")):
+            response = client.post(f"/check_account/{row_id}")
+        self.assertEqual(response.json["account"]["allocation_label"], "Chưa cấp")
+        self.assertEqual(response.json["account"]["subscription_label"], "Hoạt động")
+        self.assertIn('data-allocated="false" data-result="LIVE"', client.get("/").get_data(as_text=True))
+        with self.web.app_context():
+            row = m.db.session.get(m.AccountVault, row_id)
             m.db.session.delete(row)
             m.db.session.commit()
+
+    def test_legacy_tv_death_overrides_stale_live_check(self):
+        m = self.module
+        row = m.AccountVault(status="Dead", subscription_check="LIVE")
+        self.assertEqual(row.last_subscription_result, "DEAD")
+        self.assertEqual(row.allocation_label, "Death")
+        row.record_check("LIVE")
+        self.assertEqual(row.allocation_label, "Chưa cấp")
+        self.assertEqual(row.last_subscription_result, "LIVE")
 
     def test_allocation_change_during_check_preserves_new_owner(self):
         m = self.module

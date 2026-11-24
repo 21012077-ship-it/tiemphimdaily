@@ -115,6 +115,7 @@ class PremiumSlot(db.Model):
 class AccountVault(db.Model):
     _stock_status_by_check = {'LIVE': 'Đã Live', 'EXPIRED': 'Hết hạn', 'DEAD': 'Dead'}
     _check_by_legacy_status = {status: result for result, status in _stock_status_by_check.items()}
+    _unusable_results = ('DEAD', 'EXPIRED')
 
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(100), unique=True)
@@ -145,34 +146,44 @@ class AccountVault(db.Model):
 
     @property
     def allocation_label(self):
+        if self.is_unusable:
+            return 'Death'
         return 'Đã cấp' if self.is_allocated else 'Chưa cấp'
 
     @property
     def last_subscription_result(self):
-        # Old rows may only have the shared stock status. Allocation alone says
-        # nothing about the subscription, including for legacy TV assignments.
-        return self.subscription_check or self._check_by_legacy_status.get(self.status)
+        legacy_result = self._check_by_legacy_status.get(self.status)
+        # Older TV checks could set Dead while retaining a prior live result.
+        if legacy_result in self._unusable_results:
+            return legacy_result
+        return self.subscription_check or legacy_result
+
+    @property
+    def is_unusable(self):
+        return self.last_subscription_result in self._unusable_results
 
     @property
     def subscription_label(self):
         return {
             None: 'Chưa có kết quả',
-            'LIVE': 'Có gói ở lần kiểm tra',
+            'LIVE': 'Hoạt động',
             'EXPIRED': 'Hết hạn hoặc tạm ngưng',
+            'DEAD': 'Cookie không còn hiệu lực',
         }.get(self.last_subscription_result, 'Chưa xác minh được')
 
     def record_check(self, result):
+        if result == 'UNKNOWN' and self.is_unusable:
+            return
         self.subscription_check = result
         if result in self._stock_status_by_check:
             self.last_checked_at = datetime.now()
-            if not self.is_allocated:
-                self.status = self._stock_status_by_check[result]
+            self.status = 'Đã Cấp' if self.is_allocated else self._stock_status_by_check[result]
 
     def release_allocation(self):
         self.subscription_check = self.last_subscription_result
-        if self.subscription_check in ('EXPIRED', 'DEAD'):
+        if self.is_unusable:
             self.status = self._stock_status_by_check[self.subscription_check]
-        elif self.status not in ('Hết hạn', 'Dead'):
+        else:
             self.status = 'Offline'
         self.assigned_to = ''
         self.assigned_to_user_id = None
@@ -181,7 +192,11 @@ class AccountVault(db.Model):
 
     @classmethod
     def unassigned_candidates(cls, plan=''):
-        query = cls.query.filter(~cls.is_allocated, cls.status.in_(['Offline', 'Chưa Check', 'Đã Live']))
+        query = cls.query.filter(
+            ~cls.is_allocated,
+            cls.status.in_(['Offline', 'Chưa Check', 'Đã Live']),
+            db.func.coalesce(cls.subscription_check, '').notin_(cls._unusable_results),
+        )
         if plan:
             query = query.filter(db.func.lower(db.func.trim(cls.plan)) == plan.lower())
         return query
@@ -540,6 +555,17 @@ def get_visible_premiums(visible_slots):
     return visible
 
 
+def format_vault_check(acc):
+    return {
+        "id": acc.id,
+        "is_allocated": acc.is_allocated,
+        "is_unusable": acc.is_unusable,
+        "allocation_label": acc.allocation_label,
+        "subscription_result": acc.last_subscription_result,
+        "subscription_label": acc.subscription_label,
+    }
+
+
 def format_vault_status(acc, include_secrets=False):
     if include_secrets or (current_user.is_authenticated and current_user.role == 'admin'):
         password = acc.password
@@ -571,14 +597,12 @@ def format_vault_status(acc, include_secrets=False):
                 remaining_text = f"Còn {hours} giờ"
 
     return {
-        "id": acc.id,
+        **format_vault_check(acc),
         "email": acc.email,
         "password": password,
         "plan": acc.plan,
         "cookies": cookies,
         "status": acc.status,
-        "allocation_label": acc.allocation_label,
-        "subscription_label": acc.subscription_label,
         "assigned_to": acc.assigned_to or "",
         "assigned_at": acc.assigned_at.strftime('%d/%m/%Y %H:%M') if acc.assigned_at else "",
         "last_checked_at": acc.last_checked_at.strftime('%d/%m/%Y %H:%M') if acc.last_checked_at else "",
@@ -653,7 +677,7 @@ def convert_cookies_for_playwright(raw_cookies):
         value = c.get("value")
         domain = c.get("domain")
         path = c.get("path", "/")
-        if not name or not value or not domain:
+        if not all(isinstance(field, str) and field for field in (name, value, domain, path)):
             continue
         item = {
             "name": name,
@@ -713,202 +737,67 @@ def report_check_error(stage, error):
 
 
 def check_netflix_cookie_live(cookie_text):
-    raw_cookies = parse_cookie_blob(cookie_text)
-    cookies = convert_cookies_for_playwright(raw_cookies)
-
+    cookies = convert_cookies_for_playwright(parse_cookie_blob(cookie_text))
     if not cookies:
-        return 'DEAD', "Cookie rỗng hoặc sai định dạng"
+        return 'DEAD', "Cookie rỗng hoặc sai định dạng."
 
-    browser = None
-    context = None
     stage = 'startup'
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True, args=["--no-sandbox"])
-            stage = 'setup'
-            context = browser.new_context(viewport={"width": 1400, "height": 900})
-            context.add_cookies(cookies)
-            page = context.new_page()
-            stage = 'page'
-            
-            page.goto("https://www.netflix.com/browse", wait_until="domcontentloaded", timeout=60000)
-            time.sleep(5)
-            current_url = (page.url or "").lower()
-            html = (page.content() or "").lower()
-            is_login = ("/login" in current_url) or ("/signin" in current_url)
-            live_signals = ["profilesgate", "browse", "accountmenuitem", "netflix"]
-            
-            if is_login:
-                stage = 'cleanup'
-                browser.close()
-                return 'DEAD', "Cookie đã chết, bị chuyển về trang login" # <-- BÁO DEAD
-            
-            if any(sig in html for sig in live_signals) or "/browse" in current_url:
+            try:
+                stage = 'setup'
+                context = browser.new_context(viewport={"width": 1400, "height": 900})
+                context.add_cookies(cookies)
+                page = context.new_page()
+
+                stage = 'page'
+                response = page.goto("https://www.netflix.com/YourAccount",
+                                     wait_until="domcontentloaded", timeout=60000)
+                time.sleep(4)
+                location = urllib.parse.urlsplit(page.url)
+                if location.hostname not in ('netflix.com', 'www.netflix.com'):
+                    return 'UNKNOWN', "Netflix không trả về trang kiểm tra thành công."
+                path = location.path.lower().strip('/').split('/')
+                if 'login' in path or 'signin' in path:
+                    return 'DEAD', "Cookie đã hết hiệu lực, Netflix yêu cầu đăng nhập lại."
+                if response is None or not response.ok:
+                    return 'UNKNOWN', "Netflix không trả về trang kiểm tra thành công."
+
                 stage = 'subscription'
+                body = ' '.join(page.inner_text("body").lower().split())
+                inactive_signals = (
+                    "account is on hold", "account is paused", "account suspended",
+                    "membership is paused", "membership has ended", "account is no longer active",
+                    "we can't process your payment", "payment is past due", "unpause now", "finish sign-up",
+                    "tài khoản đang bị tạm ngưng", "tài khoản của bạn bị tạm ngưng",
+                    "lỗi thanh toán", "không thể xử lý khoản thanh toán", "hoàn tất đăng ký",
+                    "tu cuenta está suspendida", "sua conta está suspensa",
+                    "votre compte est suspendu", "zahlung fehlgeschlagen",
+                    "не удалось обработать ваш платеж", "betaling niet verwerken",
+                    "无法处理您的付款", "無法處理您的付款", "お支払いを処理できません",
+                    "결제를 처리할 수 없습니다", "भुगतान को प्रोसेस नहीं", "לא הצלחנו לעבד את התשלום",
+                )
+                if any(signal in body for signal in inactive_signals):
+                    return 'EXPIRED', "Netflix báo gói đã hết hạn, tạm ngưng hoặc có lỗi thanh toán."
+
+                if 'youraccount' in path or 'account' in path:
+                    active_signals = (
+                        "next payment", "next billing date", "undo cancel request",
+                        "ngày thanh toán tiếp theo", "khoản thanh toán tiếp theo", "hủy yêu cầu hủy",
+                    )
+                    plan_links = page.locator('a[href*="/cancelplan" i], '
+                                              'a[href*="/account/membership/plan" i], '
+                                              'a[href*="/changeplan" i]').all()
+                    if any(signal in body for signal in active_signals) or any(link.is_visible() for link in plan_links):
+                        return 'LIVE', "Cookie hoạt động và gói cước còn hiệu lực."
+                return 'UNKNOWN', "Chưa xác minh được trạng thái gói trên Netflix."
+            finally:
                 try:
-                    page.goto("https://www.netflix.com/YourAccount", wait_until="domcontentloaded", timeout=60000)
-                    time.sleep(4)
-                    body_text = (page.inner_text("body") or "").lower()
-                    
-                    # Danh sách từ khóa nhận diện tài khoản hết hạn / hold / chưa thanh toán (Bao gồm EN & VI)
-                    # Bộ từ khóa nhận diện tài khoản hết hạn / hold / chưa thanh toán (Bản Ultimate + Account Hold)
-                    expired_keywords = [
-                        # --- NHÓM TỪ KHÓA TẠM NGƯNG TÀI KHOẢN (ACCOUNT HOLD) MỚI THÊM ---
-                        "account is on hold", "account suspended", "retry payment",
-                        "tu cuenta está suspendida", "cuenta suspendida", "reintentar pago",
-                        "tài khoản đang bị tạm ngưng", "tài khoản của bạn bị tạm ngưng", "thử thanh toán lại",
-                        "sua conta está suspensa", "conta suspensa", "tentar o pagamento novamente",
-                        "votre compte est suspendu", "réessayer le paiement",
-                        
-                        # --- CHÂU MỸ & CHÂU ÂU (Phổ biến) ---
-                        # 1. Tiếng Anh (English - Global)
-                        "we can't process your payment", "process your payment", "restart your membership", 
-                        "update payment", "finish sign-up", "payment is past due",
-                        
-                        # 2. Tiếng Tây Ban Nha (Spanish - LATAM & Spain)
-                        "procesar tu pago", "procesar el pago", "reiniciar tu membresía", 
-                        "actualizar pago", "finalizar registro", "actualiza tu forma de pago",
-                        
-                        # 3. Tiếng Bồ Đào Nha (Portuguese - Brazil & Portugal)
-                        "processar seu pagamento", "processar o pagamento", "reiniciar assinatura", 
-                        "atualizar forma de pagamento", "reiniciar a sua adesão", "atualize o pagamento",
-                        
-                        # 4. Tiếng Pháp (French)
-                        "traiter votre paiement", "réactiver votre abonnement", 
-                        "mettre à jour le paiement", "mode de paiement",
-                        
-                        # 5. Tiếng Đức (German)
-                        "zahlung nicht verarbeiten", "mitgliedschaft reaktivieren", 
-                        "zahlungsart aktualisieren", "zahlung fehlgeschlagen",
-                        
-                        # 6. Tiếng Ý (Italian)
-                        "elaborare il pagamento", "riattiva il tuo abbonamento", 
-                        "aggiorna il metodo", "aggiorna il pagamento",
-
-                        # --- ĐÔNG ÂU & NGA ---
-                        # 7. Tiếng Nga (Russian)
-                        "не удалось обработать ваш платеж", "возобновить подписку", "обновить способ оплаты",
-                        
-                        # 8. Tiếng Ukraina (Ukrainian)
-                        "не вдалося обробити ваш платіж", "відновити членство", "оновити спосіб оплати",
-                        
-                        # 9. Tiếng Ba Lan (Polish)
-                        "przetworzyć twojej płatności", "odnów członkostwo", "zaktualizuj metodę płatności",
-                        
-                        # 10. Tiếng Romania (Romanian)
-                        "procesa plata", "repornește abonamentul", "actualizează metoda de plată",
-                        
-                        # 11. Tiếng Hungary (Hungarian)
-                        "feldolgozni a fizetést", "tagság újraindítása", "fizetési mód frissítése",
-                        
-                        # 12. Tiếng Séc (Czech)
-                        "zpracovat vaši platbu", "obnovit členství", "aktualizovat platební metodu",
-                        
-                        # 13. Tiếng Slovak (Slovak)
-                        "spracovať vašu platbu", "obnoviť členstvo", "aktualizovať spôsob platby",
-                        
-                        # 14. Tiếng Hy Lạp (Greek)
-                        "επεξεργαστούμε την πληρωμή", "επανέναρξη της συνδρομής", "ενημέρωση πληρωμής",
-                        
-                        # 15. Tiếng Croatia / Serbia (Croatian / Serbian)
-                        "obraditi vašu uplatu", "ponovno pokrenite članstvo", "ažurirajte plaćanje",
-                        "obradimo vašu uplatu", "ponovo pokrenite članstvo",
-                        
-                        # 16. Tiếng Bulgaria (Bulgarian)
-                        "обработим плащането", "подновете членството", "актуализирайте плащането",
-
-                        # --- BẮC ÂU & TÂY ÂU KHÁC ---
-                        # 17. Tiếng Hà Lan (Dutch)
-                        "betaling niet verwerken", "lidmaatschap opnieuw starten", "betaalgegevens bijwerken",
-                        
-                        # 18. Tiếng Thụy Điển (Swedish)
-                        "behandla din betalning", "starta om ditt medlemskap", "uppdatera betalningsmetod",
-                        
-                        # 19. Tiếng Na Uy (Norwegian)
-                        "behandle betalingen", "start medlemskapet på nytt", "oppdater betalingsmåte",
-                        
-                        # 20. Tiếng Đan Mạch (Danish)
-                        "behandle din betaling", "genstart dit medlemskab", "opdater betaling",
-                        
-                        # 21. Tiếng Phần Lan (Finnish)
-                        "käsitellä maksuasi", "aloita jäsenyys uudelleen", "päivitä maksutapa",
-
-                        # --- CHÂU Á & THÁI BÌNH DƯƠNG ---
-                        # 22. Tiếng Việt (Vietnamese)
-                        "lỗi thanh toán", "có vấn đề với thanh toán", "cập nhật thanh toán", 
-                        "khôi phục tư cách thành viên", "hoàn tất đăng ký", "xử lý thanh toán",
-                        
-                        # 23. Tiếng Trung (Chinese - Giản/Phồn thể)
-                        "无法处理您的付款", "無法處理您的付款", "重新启动", "重新啟動", "更新付款", "更新付款方式",
-                        
-                        # 24. Tiếng Nhật (Japanese)
-                        "お支払いを処理できません", "メンバーシップを再開", "お支払い方法の更新",
-                        
-                        # 25. Tiếng Hàn (Korean)
-                        "결제를 처리할 수 없습니다", "멤버십 재시작", "결제 수단 업데이트",
-                        
-                        # 26. Tiếng Thái (Thai)
-                        "ดำเนินการชำระเงิน", "เริ่มการเป็นสมาชิก", "อัปเดตการชำระเงิน",
-                        
-                        # 27. Tiếng Indonesia (Indonesian)
-                        "memproses pembayaran", "mulai ulang keanggotaan", "perbarui pembayaran",
-                        
-                        # 28. Tiếng Mã Lai (Malay)
-                        "memproses bayaran", "mulakan semula keahlian", "kemas kini pembayaran",
-                        
-                        # 29. Tiếng Tagalog (Filipino)
-                        "iproseso ang iyong pagbabayad", "i-restart ang iyong membership", "i-update ang pagbabayad",
-                        
-                        # 30. Tiếng Hindi (Indian)
-                        "भुगतान को प्रोसेस नहीं", "मेंबरशिप दोबारा शुरू", "भुगतान का तरीका अपडेट",
-                        
-                        # 31. Tiếng Tamil & Telugu & Bengali (India)
-                        "கட்டணத்தைச் செயலாக்க", "பேமெண்ட்டைப் புதுப்பி", 
-                        "చెల్లింపును ప్రాసెస్", "చెల్లింపును అప్‌డేట్",
-                        "পেমেন্ট প্রসেস", "পেমেন্ট আপডেট",
-
-                        # --- TRUNG ĐÔNG & CHÂU PHI ---
-                        # 32. Tiếng Thổ Nhĩ Kỳ (Turkish)
-                        "ödemenizi işleme", "üyeliğinizi yeniden başlatın", "ödeme yöntemini", "ödeme sorunu",
-                        
-                        # 33. Tiếng Ả Rập (Arabic)
-                        "معالجة عملية الدفع", "إعادة تشغيل عضويتك", "تحديث طريقة الدفع",
-                        
-                        # 34. Tiếng Do Thái (Hebrew)
-                        "לא הצלחנו לעבד את התשלום", "חידוש המינוי", "עדכון פרטי התשלום",
-                        
-                        # 35. Tiếng Swahili (Châu Phi)
-                        "kushughulikia malipo", "anza upya uanachama", "sasisha malipo",
-                        
-                        # 36. Tiếng Afrikaans (Nam Phi)
-                        "betaling verwerk nie", "herbegin jou lidmaatskap", "werk betaling op"
-                    ]
-                    for kw in expired_keywords:
-                        if kw in body_text:
-                            stage = 'cleanup'
-                            browser.close()
-                            return 'EXPIRED', f"Tài khoản HẾT HẠN / HOLD (Phát hiện: {kw})" # <-- BÁO HẾT HẠN
-                    
-                    stage = 'cleanup'
                     browser.close()
-                    return 'LIVE', "Cookie hoạt động & Đang có gói cước" # <-- BÁO LIVE
-                    
                 except Exception as error:
-                    try:
-                        if context: context.close()
-                        if browser: browser.close()
-                    except Exception:
-                        pass
-                    return report_check_error(stage, error)
-
-            stage = 'cleanup'
-            browser.close()
-            return 'UNKNOWN', "Chưa xác định được trạng thái tài khoản."
+                    report_check_error('cleanup', error)
     except Exception as error:
-        try:
-            if context: context.close()
-            if browser: browser.close()
-        except: pass
         return report_check_error(stage, error)
 
 
@@ -1149,9 +1038,14 @@ def index():
 
     vault_accounts = AccountVault.query.order_by(AccountVault.id.desc()).all() if current_user.role == 'admin' else []
     
-    vault_stats = {'assigned': 0, 'unassigned': 0, 'premium': 0, 'standard': 0}
+    vault_stats = {'assigned': 0, 'unassigned': 0, 'premium': 0, 'standard': 0, 'live': 0, 'death': 0}
     for acc in vault_accounts:
-        vault_stats['assigned' if acc.is_allocated else 'unassigned'] += 1
+        if acc.is_unusable:
+            vault_stats['death'] += 1
+        else:
+            vault_stats['assigned' if acc.is_allocated else 'unassigned'] += 1
+        if acc.last_subscription_result == 'LIVE':
+            vault_stats['live'] += 1
         plan = acc.plan or ''
         if 'Premium' in plan:
             vault_stats['premium'] += 1
@@ -1475,11 +1369,11 @@ def check_account(item_id):
         abort(404)
     acc.record_check(status_code)
     db.session.commit()
+    message = f"{check_msg} Cấp phát: {acc.allocation_label}."
     if status_code == 'UNKNOWN':
         return jsonify(success=False, account_id=acc.id, subscription_label=acc.subscription_label,
-                       message=f"{check_msg} Cấp phát: {acc.allocation_label.lower()}."), 503
-    return jsonify(success=True, message=f"{check_msg} Cấp phát: {acc.allocation_label.lower()}.",
-                   account=format_vault_status(acc))
+                       message=message, account=format_vault_check(acc)), 503
+    return jsonify(success=True, message=message, account=format_vault_status(acc))
 
 
 def get_netflix_login_url(cookie_text):
@@ -1571,6 +1465,7 @@ def get_netflix_login_url(cookie_text):
 def fetch_account():
     started = time.perf_counter()
     durations = {}
+    vault_checks = []
 
     @after_this_request
     def add_timing(response):
@@ -1602,12 +1497,15 @@ def fetch_account():
             acc = (AccountVault.unassigned_candidates(plan).filter_by(id=candidate_id)
                    .populate_existing().with_for_update().first())
             if acc is None:
-                return jsonify(success=False, message="Trạng thái kho đã thay đổi. Yêu cầu này chưa cấp tài khoản."), 409
+                return jsonify(success=False, vault_checks=vault_checks,
+                               message="Trạng thái kho đã thay đổi. Yêu cầu này chưa cấp tài khoản."), 409
             acc.record_check(status_code)
             if status_code == 'UNKNOWN':
                 db.session.commit()
+                if current_user.role == 'admin':
+                    vault_checks.append(format_vault_check(acc))
                 return jsonify(success=False, account_id=acc.id if current_user.role == 'admin' else None,
-                               subscription_label=acc.subscription_label,
+                               subscription_label=acc.subscription_label, vault_checks=vault_checks,
                                message=f"{check_msg} Yêu cầu này chưa cấp tài khoản."), 503
 
             if status_code == 'LIVE':
@@ -1628,12 +1526,16 @@ def fetch_account():
                     'success': True,
                     'message': f'Lấy tài khoản thành công. {check_msg}',
                     'account': format_vault_status(acc, include_secrets=True),
+                    'vault_checks': vault_checks,
                     'login_url': login_url or ''
                 })
             
             db.session.commit()
+            if current_user.role == 'admin':
+                vault_checks.append(format_vault_check(acc))
 
-        return jsonify({'success': False, 'message': 'Đã quét qua các acc nhưng đều Dead hoặc Hết hạn. Hãy nạp thêm kho!'}), 404
+        return jsonify(success=False, vault_checks=vault_checks,
+                       message='Các tài khoản đã kiểm tra đều có cookie hỏng hoặc gói không còn hiệu lực.'), 404
 
     except Exception as e:
         return jsonify({'success': False, 'message': f'Lỗi khi lấy tài khoản: {str(e)}'}), 500
@@ -1675,10 +1577,8 @@ def login_tv_code():
                 'message': f'Duyệt TV thành công trên Email: {acc.email}! {msg}'
             })
 
-        elif "chết" in msg.lower() or "login" in msg.lower():
-            acc.subscription_check = acc.last_subscription_result
-            acc.status = 'Dead'
-            acc.last_checked_at = datetime.now()
+        elif msg.startswith(('Cookie đã chết', 'Cookie rỗng hoặc sai định dạng')):
+            acc.record_check('DEAD')
             db.session.commit()
             continue
         else:
@@ -1698,6 +1598,8 @@ def assign_account(item_id):
         return jsonify({'success': False, 'message': 'Tài khoản này đã được cấp cho người khác.'}), 400
     if current_user.role != 'admin' and acc.assigned_to_user_id != current_user.id:
         return jsonify(success=False, message="Tài khoản này chưa được cấp cho bạn."), 403
+    if acc.is_unusable:
+        return jsonify(success=False, message="Tài khoản đang ở trạng thái Death."), 409
 
     data = request.get_json(silent=True) or {}
     assigned_to = (data.get('assigned_to') or '').strip()
