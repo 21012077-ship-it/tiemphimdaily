@@ -1039,9 +1039,9 @@
                                     </td>
 
                                     <td class="p-4 text-center">
-                                        <button onclick="checkAccountNow({{ acc.id }}, this)"
+                                        <button type="button" onclick="checkAccountNow({{ acc.id }}, this)"
                                                 class="text-teal-600 hover:bg-teal-50 p-2 rounded-lg transition-colors border border-transparent hover:border-teal-200"
-                                                title="Check Live Ngay">
+                                                title="Kiểm tra và lấy tài khoản" aria-label="Kiểm tra và lấy tài khoản">
                                             <i class="fas fa-play-circle text-lg"></i>
                                         </button>
 
@@ -2004,9 +2004,20 @@
             filterVaultAccounts();
         }
 
+        function showFetchedAccount({ account, login_url }) {
+            document.getElementById('fetch_account_id').value = account.id || '';
+            document.getElementById('fetch_email').value = account.email || '';
+            document.getElementById('fetch_pass').value = account.password || '';
+            document.getElementById('fetch_cookie').value = account.cookies || '';
+            document.getElementById('fetch_assigned_to').value = '';
+            document.getElementById('fetch_login_url').value = login_url || '';
+            document.getElementById('fetch_login_url_container').classList.toggle('hidden', !login_url);
+            document.getElementById('modalFetchAccount').classList.remove('hidden');
+        }
+
         let fetchingAccount = false;
         async function openFetchModal(btn) {
-            if (fetchingAccount) return;
+            if (fetchingAccount || vaultCheckRunning) return;
             const plan = btn.dataset.plan ?? document.getElementById('fetch_plan')?.value;
             if (plan === undefined) {
                 showToastMessage('Không đọc được lựa chọn gói. Vui lòng tải lại trang.', 'warning');
@@ -2042,25 +2053,7 @@
                     return;
                 }
 
-                const acc = data.account;
-
-                document.getElementById('fetch_account_id').value = acc.id || '';
-                document.getElementById('fetch_email').value = acc.email || '';
-                document.getElementById('fetch_pass').value = acc.password || '';
-                document.getElementById('fetch_cookie').value = acc.cookies || '';
-                document.getElementById('fetch_assigned_to').value = '';
-
-                const loginUrl = data.login_url;
-                const loginUrlContainer = document.getElementById('fetch_login_url_container');
-                const loginUrlInput = document.getElementById('fetch_login_url');
-                if (loginUrl) {
-                    loginUrlInput.value = loginUrl;
-                    loginUrlContainer.classList.remove('hidden');
-                } else {
-                    loginUrlContainer.classList.add('hidden');
-                }
-
-                document.getElementById('modalFetchAccount').classList.remove('hidden');
+                showFetchedAccount(data);
             } catch (err) {
                 console.error(err);
                 showToastMessage('Chưa nhận được kết quả. Hãy tải lại kho để kiểm tra tài khoản đã cấp trước khi bấm lại.', 'warning');
@@ -2142,26 +2135,34 @@
 
         let vaultCheckRunning = false;
         async function checkAccountNow(id, btn) {
-            if (vaultCheckRunning) return;
+            if (vaultCheckRunning || fetchingAccount) return;
             vaultCheckRunning = true;
             btn.disabled = true;
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i>';
             try {
-                const res = await fetch(`/check_account/${id}`, { method: 'POST' });
+                const res = await fetch(`/check_account/${id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ allocate: true })
+                });
                 const data = await res.json();
                 updateVaultChecks([data.account]);
+                if (data.allocated) showFetchedAccount(data);
                 showToastMessage(data.message || 'Chưa nhận được kết quả kiểm tra',
                     data.success && !data.account?.is_unusable ? 'success' : 'warning');
             } catch (err) {
                 console.error(err);
-                showToastMessage('Lỗi khi kiểm tra tài khoản', 'warning');
+                showToastMessage('Chưa nhận được kết quả. Hãy tải lại kho để kiểm tra tài khoản đã cấp trước khi bấm lại.', 'warning');
             } finally {
+                btn.innerHTML = originalHTML;
                 btn.disabled = false;
                 vaultCheckRunning = false;
             }
         }
 
         async function batchCheckAccounts() {
-            if (vaultCheckRunning) return;
+            if (vaultCheckRunning || fetchingAccount) return;
             const rows = document.querySelectorAll('.vault-row');
             if (rows.length === 0) {
                 showToastMessage('Kho chưa có tài khoản để kiểm tra.');

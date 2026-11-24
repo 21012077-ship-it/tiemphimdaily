@@ -1355,21 +1355,45 @@ def delete_vault(item_id):
     return redirect(url_for('index') + '#view-vault')
 
 
+def allocate_vault_account(acc):
+    now = datetime.now()
+    acc.status = 'Đã Cấp'
+    acc.assigned_to_user_id = current_user.id
+    acc.assigned_to = current_user.full_name or current_user.username
+    acc.assigned_at = now
+    acc.next_recheck_at = now + timedelta(days=10)
+    db.session.commit()
+    log_activity('Lấy account kho', f"Lấy {acc.email} - Plan: {acc.plan}")
+
+
 @app.route('/check_account/<int:item_id>', methods=['POST'])
 @login_required
 @admin_required
 def check_account(item_id):
+    data = request.get_json(silent=True)
+    allocate = isinstance(data, dict) and data.get('allocate') is True
     acc = db.session.get(AccountVault, item_id)
     if not acc:
         return jsonify({'success': False, 'message': 'Không tìm thấy tài khoản.'}), 404
 
-    status_code, check_msg = check_netflix_cookie_live(acc.cookies)
+    checked_cookies = acc.cookies
+    status_code, check_msg = check_netflix_cookie_live(checked_cookies)
     acc = db.session.get(AccountVault, item_id, populate_existing=True, with_for_update=True)
     if acc is None:
-        abort(404)
+        return jsonify(success=False, message='Không tìm thấy tài khoản.'), 404
+    if acc.cookies != checked_cookies:
+        return jsonify(success=False, message='Cookie đã thay đổi. Vui lòng kiểm tra lại.'), 409
+
     acc.record_check(status_code)
+    if allocate and status_code == 'LIVE' and not acc.is_allocated:
+        allocate_vault_account(acc)
+        return jsonify(success=True, allocated=True, message=f'Lấy tài khoản thành công. {check_msg}',
+                       account=format_vault_status(acc))
+
     db.session.commit()
     message = f"{check_msg} Cấp phát: {acc.allocation_label}."
+    if allocate and status_code == 'LIVE':
+        message = f'{check_msg} Tài khoản đã được cấp cho {acc.assigned_to or "người nhận hiện tại"}.'
     if status_code == 'UNKNOWN':
         return jsonify(success=False, account_id=acc.id, subscription_label=acc.subscription_label,
                        message=message, account=format_vault_check(acc)), 503
@@ -1509,14 +1533,7 @@ def fetch_account():
                                message=f"{check_msg} Yêu cầu này chưa cấp tài khoản."), 503
 
             if status_code == 'LIVE':
-                now = datetime.now()
-                acc.status = 'Đã Cấp'
-                acc.assigned_to_user_id = current_user.id
-                acc.assigned_to = current_user.full_name or current_user.username
-                acc.assigned_at = now
-                acc.next_recheck_at = now + timedelta(days=10)
-                db.session.commit()
-                log_activity('Lấy account kho', f"Lấy {acc.email} - Plan: {acc.plan}")
+                allocate_vault_account(acc)
 
                 link_started = time.perf_counter()
                 login_url = get_netflix_login_url(acc.cookies)

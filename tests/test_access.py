@@ -283,6 +283,57 @@ class AccessTests(unittest.TestCase):
         self.assertEqual(row.allocation_label, "Chưa cấp")
         self.assertEqual(row.last_subscription_result, "LIVE")
 
+    def test_row_check_allocates_only_the_selected_live_account(self):
+        m = self.module
+        client = self.web.test_client()
+        client.post("/login", data={"username": "test-admin", "password": self.password})
+        addresses = [f"row-{label}@example.invalid" for label in ("other", "live", "dead", "unknown", "owned")]
+        with self.web.app_context():
+            owner = m.User.query.filter_by(username="test-bob").one()
+            rows = [m.AccountVault(email=email, plan="Standard") for email in addresses]
+            rows[-1].status = "Đã Cấp"
+            rows[-1].assigned_to = "Người nhận cũ"
+            rows[-1].assigned_to_user_id = owner.id
+            owner_id = owner.id
+            m.db.session.add_all(rows)
+            m.db.session.commit()
+            other_id, live_id, dead_id, unknown_id, owned_id = [row.id for row in rows]
+
+        try:
+            with patch.object(m, "check_netflix_cookie_live", return_value=("LIVE", "Gói còn hiệu lực")):
+                batch_response = client.post(f"/check_account/{live_id}")
+                live = client.post(f"/check_account/{live_id}", json={"allocate": True})
+                owned = client.post(f"/check_account/{owned_id}", json={"allocate": True})
+
+            self.assertFalse(batch_response.json["account"]["is_allocated"])
+            self.assertTrue(live.json["allocated"])
+            self.assertEqual(live.json["account"]["id"], live_id)
+            self.assertEqual(live.json["account"]["allocation_label"], "Đã cấp")
+            self.assertFalse(owned.json.get("allocated", False))
+
+            dead = client.post(f"/check_account/{dead_id}", json={"allocate": True})
+            self.assertFalse(dead.json.get("allocated", False))
+            self.assertEqual(dead.json["account"]["allocation_label"], "Death")
+
+            with patch.object(m, "check_netflix_cookie_live", return_value=("UNKNOWN", "Hết thời gian chờ")):
+                unknown = client.post(f"/check_account/{unknown_id}", json={"allocate": True})
+            self.assertEqual(unknown.status_code, 503)
+            self.assertEqual(unknown.json["account"]["subscription_result"], "UNKNOWN")
+
+            with self.web.app_context():
+                self.assertFalse(m.db.session.get(m.AccountVault, other_id).is_allocated)
+                assigned = m.db.session.get(m.AccountVault, live_id)
+                admin = m.User.query.filter_by(username="test-admin").one()
+                self.assertEqual(assigned.assigned_to_user_id, admin.id)
+                self.assertEqual(assigned.next_recheck_at - assigned.assigned_at, timedelta(days=10))
+                self.assertEqual(m.db.session.get(m.AccountVault, owned_id).assigned_to_user_id, owner_id)
+                self.assertFalse(m.db.session.get(m.AccountVault, dead_id).is_allocated)
+                self.assertFalse(m.db.session.get(m.AccountVault, unknown_id).is_allocated)
+        finally:
+            with self.web.app_context():
+                m.AccountVault.query.filter(m.AccountVault.email.in_(addresses)).delete()
+                m.db.session.commit()
+
     def test_allocation_change_during_check_preserves_new_owner(self):
         m = self.module
         client = self.web.test_client()
